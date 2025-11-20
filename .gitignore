@@ -1,6 +1,63 @@
+# Tool directories (OpenCode, .specify, etc.)
 .opencode/
 .specify/
 .claude/
 .gemini/
-*/DS_Store
+
+# Project directories
 scratch/
+
+# macOS and Windows
+*/DS_Store
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+
+# Go binaries and artifacts
+/veve
+/veve-*
+*.exe
+*.test
+*.out
+
+# Dependencies
+vendor/
+Godeps/
+
+# Build artifacts
+dist/
+build/
+*.o
+*.a
+*.so
+*.dll
+*.dylib
+
+# Test and coverage
+coverage.out
+coverage.html
+*.prof
+*.pprof
+*.test.log
+
+# IDE and editor
+.vscode/
+.idea/
+*.iml
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Go Module Cache
+go.sum

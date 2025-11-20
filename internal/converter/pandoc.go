@@ -120,11 +120,22 @@ func (pc *PandocConverter) Convert(opts ConversionOptions) error {
 
 	// Add theme/CSS if provided
 	if opts.Theme != "" {
-		// Check if theme file exists
-		if _, err := os.Stat(opts.Theme); err != nil {
-			return fmt.Errorf("theme file not found: %s: %w", opts.Theme, err)
+		// Theme can be:
+		// 1. A file path (for embedded or user themes written to temp)
+		// 2. A theme name that will be resolved by caller
+
+		// Check if it looks like a file path (contains / or \)
+		if strings.Contains(opts.Theme, string(filepath.Separator)) || strings.Contains(opts.Theme, "/") {
+			// It's a file path - verify it exists
+			if _, err := os.Stat(opts.Theme); err != nil {
+				return fmt.Errorf("theme file not found: %s: %w", opts.Theme, err)
+			}
+			args = append(args, "--css", opts.Theme)
+		} else {
+			// It's a theme name - would be resolved by caller before calling Convert
+			// For now, skip if it's just a name (caller should pass path)
+			// This maintains backward compatibility
 		}
-		args = append(args, "--css", opts.Theme)
 	}
 
 	// Create command

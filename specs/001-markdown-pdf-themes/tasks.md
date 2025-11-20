@@ -24,7 +24,7 @@ description: "Task list for veve-cli markdown-to-PDF converter with theme manage
 
 **Phase 1** (Setup): 6 tasks  
 **Phase 2** (Foundational): 9 tasks  
-**Phase 3** (US1: Basic Conversion): 14 tasks  
+**Phase 3** (US1: Basic Conversion): 14 tasks
 
 **Total MVP: 29 tasks (~5-7 days for single developer)**
 
@@ -34,7 +34,7 @@ After MVP validation, proceed to Phase 4-7 (US2-US5) for complete feature.
 
 ## Phase 1: Setup (Project Initialization)
 
-- [ ] T001 Initialize Go project: `go mod init github.com/yourusername/veve-cli`
+- [ ] T001 Initialize Go project: `go mod init github.com/madstone-tech/veve-cli`
 - [ ] T002 [P] Create directory structure: `cmd/veve/`, `internal/{config,theme,converter,logging}/`, `themes/`, `tests/{integration,unit,contract}/`
 - [ ] T003 [P] Create `.golangci.yml` with strict linting rules (gofmt enforcement, unused vars, error handling)
 - [ ] T004 [P] Add Cobra dependency: `go get -u github.com/spf13/cobra@v1.7.0`
@@ -259,6 +259,7 @@ Phase 2: Foundational (9 tasks) - **BLOCKS ALL USER STORIES**
 ### Recommended Execution Paths
 
 **MVP First (5-7 days):**
+
 1. Phase 1 Setup
 2. Phase 2 Foundational
 3. Phase 3 US1 (basic conversion)
@@ -266,6 +267,7 @@ Phase 2: Foundational (9 tasks) - **BLOCKS ALL USER STORIES**
 5. Continue to US2, US3, US4, US5 as needed
 
 **Single Developer (4-6 weeks total):**
+
 - Phases 1-2: Foundation (~2 days)
 - Phase 3: US1 (~3-4 days) → Deploy MVP
 - Phase 4: US2 (~3-4 days)
@@ -275,6 +277,7 @@ Phase 2: Foundational (9 tasks) - **BLOCKS ALL USER STORIES**
 - Phase 8: Polish (~2-3 days)
 
 **Team of 5 Developers (2-3 weeks):**
+
 - Weeks 1: Everyone does Setup + Foundational (~2 days)
 - Week 2: Dev A=US1, Dev B=US2, Dev C=US3, Dev D=US4, Dev E=US5 (all parallel, ~3-4 days)
 - Week 3: Gather for Polish (~2-3 days) + release prep
@@ -282,10 +285,12 @@ Phase 2: Foundational (9 tasks) - **BLOCKS ALL USER STORIES**
 ### Parallel Opportunities
 
 **Phase 2 (Foundational)**: ALL 9 tasks marked [P] = 100% parallelizable
+
 - Config loader, theme registry, Pandoc wrapper, error handling, logging can all be built simultaneously
 - Duration with parallelism: 1-2 days (vs 3-5 days sequential)
 
 **Each User Story**: Tests [P] → Implementation [P] → Verification (sequential)
+
 - All contract tests can be written in parallel
 - All implementation tasks can be coded in parallel (different files)
 - Verification sequential (after all implementation complete)
@@ -295,6 +300,7 @@ Phase 2: Foundational (9 tasks) - **BLOCKS ALL USER STORIES**
 ## Task Format Validation
 
 ✅ **All 98 tasks follow strict checklist format**:
+
 - `- [ ]` checkbox prefix: 100% compliance
 - `[TaskID]` sequential T001-T098: 100% compliance
 - `[P]` parallelization markers: 78 marked (appropriate for distribution)
@@ -303,6 +309,7 @@ Phase 2: Foundational (9 tasks) - **BLOCKS ALL USER STORIES**
 - No vague tasks: 100% compliance
 
 **Example correct formats from this file**:
+
 ```
 - [ ] T001 Initialize Go project: `go mod init github.com/yourusername/veve-cli`
 - [ ] T007 [P] Implement XDG Base Directory path resolution in `internal/config/paths.go`
@@ -316,6 +323,7 @@ Phase 2: Foundational (9 tasks) - **BLOCKS ALL USER STORIES**
 ## Acceptance & Verification
 
 Each user story phase includes a final verification task:
+
 - **US1**: T029 - Verify all 5 acceptance scenarios pass
 - **US2**: T042 - Verify all 4 acceptance scenarios pass
 - **US3**: T053 - Verify all 4 acceptance scenarios pass
