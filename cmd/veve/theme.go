@@ -1,6 +1,12 @@
 package main
 
 import (
+	"fmt"
+	"os"
+	"text/tabwriter"
+
+	"github.com/andhi/veve-cli/internal/config"
+	"github.com/andhi/veve-cli/internal/theme"
 	"github.com/spf13/cobra"
 )
 
@@ -15,7 +21,35 @@ var themeListCmd = &cobra.Command{
 	Short: "List all available themes",
 	Long:  `Display all available themes (built-in and user-installed).`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// TODO: Implement theme list logic
+		// Get XDG paths
+		paths, err := config.GetPaths()
+		if err != nil {
+			return fmt.Errorf("failed to get config paths: %w", err)
+		}
+
+		// Create and initialize theme loader
+		loader := theme.NewLoader(paths.ThemesDir)
+		if err := loader.DiscoverThemes(); err != nil {
+			return fmt.Errorf("failed to discover themes: %w", err)
+		}
+
+		// Get all themes
+		themes := loader.ListThemes()
+
+		// Format as table
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(w, "NAME\tAUTHOR\tDESCRIPTION\tTYPE")
+		fmt.Fprintln(w, "----\t------\t-----------\t----")
+
+		for _, t := range themes {
+			themeType := "user"
+			if t.IsBuiltIn {
+				themeType = "built-in"
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", t.Name, t.Author, t.Description, themeType)
+		}
+
+		w.Flush()
 		return nil
 	},
 }

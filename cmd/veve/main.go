@@ -4,10 +4,13 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 
 	"github.com/andhi/veve-cli/internal"
+	"github.com/andhi/veve-cli/internal/config"
 	"github.com/andhi/veve-cli/internal/converter"
 	"github.com/andhi/veve-cli/internal/logging"
+	"github.com/andhi/veve-cli/internal/theme"
 	"github.com/spf13/cobra"
 )
 
@@ -79,9 +82,9 @@ func init() {
 }
 
 // performConversion is a shared function used by both root command and convert subcommand.
-func performConversion(inputFile, outputFile, theme, pdfEngine string, quiet, verbose bool) error {
+func performConversion(inputFile, outputFile, themeName, pdfEngine string, quiet, verbose bool) error {
 	// Log if verbose
-	logger.Debug("Converting %s to PDF (theme: %s, engine: %s)", inputFile, theme, pdfEngine)
+	logger.Debug("Converting %s to PDF (theme: %s, engine: %s)", inputFile, themeName, pdfEngine)
 
 	// Create converter
 	pc, err := converter.NewPandocConverter()
@@ -89,13 +92,49 @@ func performConversion(inputFile, outputFile, theme, pdfEngine string, quiet, ve
 		return err
 	}
 
-	// TODO: For MVP, we're skipping theme support until it's fully implemented.
-	// Users can still style PDFs using Pandoc's CSS support with future enhancements.
-	themeFile := ""
-	if theme != "default" {
-		// For non-default themes, would load from registry
-		// For now, skip theme support
-		logger.Warn("Theme support is not yet implemented. Using Pandoc defaults.")
+	// Get XDG paths for theme discovery
+	paths, err := config.GetPaths()
+	if err != nil {
+		return fmt.Errorf("failed to get config paths: %w", err)
+	}
+
+	// Create theme loader
+	loader := theme.NewLoader(paths.ThemesDir)
+
+	// Discover available themes
+	if err := loader.DiscoverThemes(); err != nil {
+		logger.Debug("Error discovering themes: %v (continuing with defaults)", err)
+	}
+
+	// Validate theme exists
+	selectedTheme, err := loader.LoadTheme(themeName)
+	if err != nil {
+		// Build helpful error message with available themes
+		availableThemes := loader.ListThemes()
+		themeNames := make([]string, len(availableThemes))
+		for i, t := range availableThemes {
+			themeNames[i] = t.Name
+		}
+		return fmt.Errorf("invalid theme '%s': available themes are: %v", themeName, themeNames)
+	}
+
+	// Load theme CSS
+	var themeFile string
+	if selectedTheme.Name != "default" || selectedTheme.IsBuiltIn {
+		css, err := loader.LoadThemeCSS(themeName)
+		if err != nil {
+			// If theme not found in loader's CSS, skip it
+			logger.Debug("Theme CSS not found for %s: %v", themeName, err)
+		} else if css != "" {
+			// Write theme CSS to temporary file for Pandoc
+			tempThemeFile := filepath.Join(os.TempDir(), fmt.Sprintf("veve-theme-%s.css", themeName))
+			if err := os.WriteFile(tempThemeFile, []byte(css), 0o644); err != nil {
+				logger.Warn("Failed to write theme CSS: %v", err)
+			} else {
+				themeFile = tempThemeFile
+				defer os.Remove(tempThemeFile) // Clean up temp file after conversion
+			}
+		}
 	}
 
 	// Perform conversion
