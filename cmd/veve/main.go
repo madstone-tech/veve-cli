@@ -39,9 +39,17 @@ Usage:
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// If no args provided, show help
+		// Allow "-" for stdin without requiring it as an explicit argument
+		// If no args and no stdin, show help
 		if len(args) == 0 {
-			return cmd.Help()
+			// Check if stdin is available
+			stat, _ := os.Stdin.Stat()
+			if (stat.Mode() & os.ModeCharDevice) != 0 {
+				// stdin is a terminal (no piped input)
+				return cmd.Help()
+			}
+			// stdin has piped input, treat as "-"
+			args = []string{"-"}
 		}
 
 		// If a markdown file is provided, treat it as convert command

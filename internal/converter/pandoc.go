@@ -3,10 +3,12 @@ package converter
 import (
 	"bytes"
 	"fmt"
+	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // PandocConverter wraps Pandoc for markdown-to-PDF conversion.
@@ -29,8 +31,8 @@ func NewPandocConverter() (*PandocConverter, error) {
 
 // ConversionOptions holds options for markdown-to-PDF conversion.
 type ConversionOptions struct {
-	InputFile  string // Path to markdown file
-	OutputFile string // Path to output PDF (optional; defaults to input with .pdf extension)
+	InputFile  string // Path to markdown file (or "-" for stdin)
+	OutputFile string // Path to output PDF (optional; defaults to input with .pdf extension, or "-" for stdout)
 	PDFEngine  string // PDF engine (pdflatex, xelatex, etc.)
 	Theme      string // Path to CSS theme file (optional)
 	Standalone bool   // Generate standalone PDF
@@ -39,9 +41,15 @@ type ConversionOptions struct {
 }
 
 // ValidateInputFile checks if the input markdown file exists and is readable.
+// If filePath is "-", it's treated as stdin (no validation needed).
 func ValidateInputFile(filePath string) error {
 	if filePath == "" {
 		return fmt.Errorf("input file path is empty")
+	}
+
+	// "-" represents stdin
+	if filePath == "-" {
+		return nil
 	}
 
 	info, err := os.Stat(filePath)
@@ -92,26 +100,44 @@ func EnsureOutputDirectory(outputPath string) error {
 }
 
 // Convert converts a markdown file to PDF using Pandoc.
+// Supports "-" for stdin (input) and stdout (output).
 func (pc *PandocConverter) Convert(opts ConversionOptions) error {
 	// Validate input file exists
 	if err := ValidateInputFile(opts.InputFile); err != nil {
 		return fmt.Errorf("input validation failed: %w", err)
 	}
 
-	// Resolve output path if not provided
-	outputPath := ResolveOutputPath(opts.InputFile, opts.OutputFile)
+	// Determine if we're using stdin/stdout
+	isStdin := opts.InputFile == "-"
+	isStdout := opts.OutputFile == "-"
 
-	// Ensure output directory exists
-	if err := EnsureOutputDirectory(outputPath); err != nil {
-		return err
+	// Resolve output path if not provided (only if not using stdout)
+	var outputPath string
+	if !isStdout {
+		outputPath = ResolveOutputPath(opts.InputFile, opts.OutputFile)
+		// Ensure output directory exists
+		if err := EnsureOutputDirectory(outputPath); err != nil {
+			return err
+		}
+	} else {
+		// For stdout, use a temp file that we'll read and output
+		outputPath = filepath.Join(os.TempDir(), "veve-stdout-"+tempRandString()+".pdf")
 	}
 
 	// Build pandoc command
-	args := []string{
-		opts.InputFile,
-		"-o", outputPath,
-		"--pdf-engine", opts.PDFEngine,
+	var args []string
+
+	// Handle input
+	if isStdin {
+		// Read from stdin - don't add input file argument
+		// Pandoc will read from stdin if no input file is specified
+	} else {
+		args = append(args, opts.InputFile)
 	}
+
+	// Add output argument
+	args = append(args, "-o", outputPath)
+	args = append(args, "--pdf-engine", opts.PDFEngine)
 
 	// Add standalone flag for better PDF output
 	if opts.Standalone {
@@ -120,10 +146,6 @@ func (pc *PandocConverter) Convert(opts ConversionOptions) error {
 
 	// Add theme/CSS if provided
 	if opts.Theme != "" {
-		// Theme can be:
-		// 1. A file path (for embedded or user themes written to temp)
-		// 2. A theme name that will be resolved by caller
-
 		// Check if it looks like a file path (contains / or \)
 		if strings.Contains(opts.Theme, string(filepath.Separator)) || strings.Contains(opts.Theme, "/") {
 			// It's a file path - verify it exists
@@ -131,19 +153,26 @@ func (pc *PandocConverter) Convert(opts ConversionOptions) error {
 				return fmt.Errorf("theme file not found: %s: %w", opts.Theme, err)
 			}
 			args = append(args, "--css", opts.Theme)
-		} else {
-			// It's a theme name - would be resolved by caller before calling Convert
-			// For now, skip if it's just a name (caller should pass path)
-			// This maintains backward compatibility
 		}
 	}
 
 	// Create command
 	cmd := exec.Command(pc.PandocPath, args...)
 
+	// If reading from stdin, connect standard input
+	if isStdin {
+		cmd.Stdin = os.Stdin
+	}
+
 	// Capture stderr for error reporting
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
+
+	// If outputting to stdout, prepare to capture stdout
+	var stdout bytes.Buffer
+	if isStdout {
+		cmd.Stdout = &stdout
+	}
 
 	// Run conversion
 	if err := cmd.Run(); err != nil {
@@ -154,5 +183,33 @@ func (pc *PandocConverter) Convert(opts ConversionOptions) error {
 		return fmt.Errorf("pandoc conversion failed: %w", err)
 	}
 
+	// If outputting to stdout, read the temp file and write to os.Stdout
+	if isStdout {
+		pdfContent, err := os.ReadFile(outputPath)
+		if err != nil {
+			return fmt.Errorf("failed to read PDF from temp file: %w", err)
+		}
+		_, err = os.Stdout.Write(pdfContent)
+		if err != nil {
+			return fmt.Errorf("failed to write PDF to stdout: %w", err)
+		}
+		// Clean up temp file
+		os.Remove(outputPath)
+	}
+
 	return nil
+}
+
+// tempRandString generates a random string for temp file names.
+func tempRandString() string {
+	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
+	b := make([]byte, 8)
+	for i := range b {
+		b[i] = charset[rand.Intn(len(charset))]
+	}
+	return string(b)
+}
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
 }
