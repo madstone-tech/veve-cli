@@ -127,7 +127,13 @@ func (l *Loader) LoadTheme(name string) (Theme, error) {
 // LoadThemeCSS loads the CSS content for a theme.
 // For built-in themes, returns the embedded CSS.
 // For user-installed themes, reads from the file system.
+// If the theme name looks like a file path (contains / or \), loads from that path.
 func (l *Loader) LoadThemeCSS(themeName string) (string, error) {
+	// Check if the theme name is a file path
+	if strings.ContainsAny(themeName, "/\\") {
+		return l.LoadThemeFromPath(themeName)
+	}
+
 	// First check built-in themes via embed.go
 	builtInCSS := l.loadBuiltInThemeCSS(themeName)
 	if builtInCSS != "" {
@@ -142,14 +148,88 @@ func (l *Loader) LoadThemeCSS(themeName string) (string, error) {
 
 	if !theme.IsBuiltIn {
 		// Read from file system for user themes
-		css, err := os.ReadFile(theme.FilePath)
+		content, err := os.ReadFile(theme.FilePath)
 		if err != nil {
 			return "", fmt.Errorf("failed to read theme file: %w", err)
 		}
-		return string(css), nil
+
+		// Parse metadata if present
+		_, css, err := ParseMetadata(string(content))
+		if err != nil {
+			// Continue even if metadata parsing fails
+			css = string(content)
+		}
+
+		return css, nil
 	}
 
 	return "", fmt.Errorf("theme CSS not found: %s", themeName)
+}
+
+// LoadThemeFromPath loads a theme CSS file from a file system path.
+// This allows using themes from arbitrary locations via --theme /path/to/theme.css
+func (l *Loader) LoadThemeFromPath(filePath string) (string, error) {
+	// Expand ~ to home directory
+	if strings.HasPrefix(filePath, "~") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("failed to get home directory: %w", err)
+		}
+		filePath = filepath.Join(home, filePath[1:])
+	}
+
+	// Make path absolute if it's relative
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve theme path: %w", err)
+	}
+
+	// Read the file
+	content, err := os.ReadFile(absPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read theme file %s: %w", filePath, err)
+	}
+
+	// Parse metadata if present
+	_, css, err := ParseMetadata(string(content))
+	if err != nil {
+		// Continue even if metadata parsing fails, use full content
+		css = string(content)
+	}
+
+	// Validate CSS
+	if err := ValidateCSS(css); err != nil {
+		return "", fmt.Errorf("theme validation failed for %s: %w", filePath, err)
+	}
+
+	return css, nil
+}
+
+// ValidateTheme validates a theme CSS file for correctness.
+func (l *Loader) ValidateTheme(filePath string) error {
+	// Read the file
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to read theme file: %w", err)
+	}
+
+	// Parse metadata
+	_, css, err := ParseMetadata(string(content))
+	if err != nil {
+		return fmt.Errorf("failed to parse metadata: %w", err)
+	}
+
+	// If no CSS was extracted, that's an error
+	if strings.TrimSpace(css) == "" {
+		return fmt.Errorf("theme file contains no CSS content")
+	}
+
+	// Validate CSS syntax
+	if err := ValidateCSS(css); err != nil {
+		return fmt.Errorf("CSS validation failed: %w", err)
+	}
+
+	return nil
 }
 
 // loadBuiltInThemeCSS loads CSS from the embedded themes (themes/embed.go).

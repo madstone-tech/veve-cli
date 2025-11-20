@@ -98,6 +98,12 @@ func performConversion(inputFile, outputFile, themeName, pdfEngine string, quiet
 		return fmt.Errorf("failed to get config paths: %w", err)
 	}
 
+	// Ensure all necessary directories exist (including themes directory)
+	if err := paths.EnsureDirectories(); err != nil {
+		logger.Debug("Warning: Failed to create directories: %v", err)
+		// Continue anyway - directories may already exist or not be writable
+	}
+
 	// Create theme loader
 	loader := theme.NewLoader(paths.ThemesDir)
 
