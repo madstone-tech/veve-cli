@@ -34,6 +34,12 @@ func (l *Loader) DiscoverThemes() error {
 	// Start fresh
 	l.registry = NewRegistry()
 
+	// Ensure user themes directory exists (auto-create if needed)
+	if _, err := l.EnsureThemesDir(); err != nil {
+		// Log the issue but continue with discovery (built-in themes still available)
+		// This is not fatal since built-in themes will still work
+	}
+
 	// Add built-in themes with metadata
 	builtInThemeMetadata := map[string]Theme{
 		"default": {
@@ -275,4 +281,27 @@ func (l *Loader) ListThemes() []Theme {
 // GetRegistry returns the underlying theme registry.
 func (l *Loader) GetRegistry() *Registry {
 	return l.registry
+}
+
+// EnsureThemesDir ensures the user themes directory exists.
+// Creates the directory with standard permissions (0755) if it doesn't exist.
+// Returns the absolute path to the themes directory and any error encountered.
+func (l *Loader) EnsureThemesDir() (string, error) {
+	// Make sure userThemesDir is set
+	if l.userThemesDir == "" {
+		return "", fmt.Errorf("themes directory path not configured")
+	}
+
+	// Create directory if it doesn't exist
+	if err := os.MkdirAll(l.userThemesDir, 0o755); err != nil {
+		return "", fmt.Errorf("failed to create themes directory %s: %w", l.userThemesDir, err)
+	}
+
+	// Return absolute path
+	absPath, err := filepath.Abs(l.userThemesDir)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve themes directory path: %w", err)
+	}
+
+	return absPath, nil
 }

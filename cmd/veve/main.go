@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/andhi/veve-cli/internal"
 	"github.com/andhi/veve-cli/internal/config"
@@ -120,33 +121,61 @@ func performConversion(inputFile, outputFile, themeName, pdfEngine string, quiet
 		logger.Debug("Error discovering themes: %v (continuing with defaults)", err)
 	}
 
-	// Validate theme exists
-	selectedTheme, err := loader.LoadTheme(themeName)
-	if err != nil {
-		// Build helpful error message with available themes
-		availableThemes := loader.ListThemes()
-		themeNames := make([]string, len(availableThemes))
-		for i, t := range availableThemes {
-			themeNames[i] = t.Name
-		}
-		return fmt.Errorf("invalid theme '%s': available themes are: %v", themeName, themeNames)
-	}
+	// Check if theme is a file path (contains / or \ or .css)
+	isFilePath := strings.ContainsAny(themeName, "/\\") || strings.HasSuffix(themeName, ".css")
 
 	// Load theme CSS
 	var themeFile string
-	if selectedTheme.Name != "default" || selectedTheme.IsBuiltIn {
-		css, err := loader.LoadThemeCSS(themeName)
+	if isFilePath {
+		// Handle file path theme
+		css, err := loader.LoadThemeFromPath(themeName)
 		if err != nil {
-			// If theme not found in loader's CSS, skip it
-			logger.Debug("Theme CSS not found for %s: %v", themeName, err)
-		} else if css != "" {
+			return fmt.Errorf("failed to load theme from path '%s': %w", themeName, err)
+		}
+
+		if css != "" {
 			// Write theme CSS to temporary file for Pandoc
-			tempThemeFile := filepath.Join(os.TempDir(), fmt.Sprintf("veve-theme-%s.css", themeName))
+			// Extract just the filename without path for temp file naming
+			baseName := filepath.Base(themeName)
+			if !strings.HasSuffix(baseName, ".css") {
+				baseName = baseName + ".css"
+			}
+			tempThemeFile := filepath.Join(os.TempDir(), fmt.Sprintf("veve-theme-%s", baseName))
 			if err := os.WriteFile(tempThemeFile, []byte(css), 0o644); err != nil {
 				logger.Warn("Failed to write theme CSS: %v", err)
 			} else {
 				themeFile = tempThemeFile
 				defer os.Remove(tempThemeFile) // Clean up temp file after conversion
+			}
+		}
+	} else {
+		// Handle named theme
+		selectedTheme, err := loader.LoadTheme(themeName)
+		if err != nil {
+			// Build helpful error message with available themes
+			availableThemes := loader.ListThemes()
+			themeNames := make([]string, len(availableThemes))
+			for i, t := range availableThemes {
+				themeNames[i] = t.Name
+			}
+			return fmt.Errorf("invalid theme '%s': available themes are: %v", themeName, themeNames)
+		}
+
+		// Load theme CSS
+		if selectedTheme.Name != "default" || selectedTheme.IsBuiltIn {
+			css, err := loader.LoadThemeCSS(themeName)
+			if err != nil {
+				// If theme not found in loader's CSS, skip it
+				logger.Debug("Theme CSS not found for %s: %v", themeName, err)
+			} else if css != "" {
+				// Write theme CSS to temporary file for Pandoc
+				tempThemeFile := filepath.Join(os.TempDir(), fmt.Sprintf("veve-theme-%s.css", themeName))
+				if err := os.WriteFile(tempThemeFile, []byte(css), 0o644); err != nil {
+					logger.Warn("Failed to write theme CSS: %v", err)
+				} else {
+					themeFile = tempThemeFile
+					defer os.Remove(tempThemeFile) // Clean up temp file after conversion
+				}
 			}
 		}
 	}
