@@ -67,3 +67,7 @@ go.sum
 PROJECT_SUMMARY.md
 
 specs/
+docs/RELEASE.md
+docs/GITHUB_SETUP.md
+docs/GITHUB_API.md
+docs/SEO.md
