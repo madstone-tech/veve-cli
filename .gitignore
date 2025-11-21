@@ -20,6 +20,7 @@ Thumbs.db
 *.exe
 *.test
 *.out
+veve*
 
 # Dependencies
 vendor/
@@ -61,3 +62,7 @@ Thumbs.db
 
 # Go Module Cache
 go.sum
+
+# Project related files
+PROJECT_SUMMARY.md
+
