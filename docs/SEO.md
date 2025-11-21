@@ -270,8 +270,8 @@ with theme support. Check it out and let me know what you think!
 **Badges:**
 Add to README:
 ```markdown
-[![Release](https://github.com/andhi/veve-cli/actions/workflows/release.yml/badge.svg)](https://github.com/andhi/veve-cli/releases)
-[![CI](https://github.com/andhi/veve-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/andhi/veve-cli/actions)
+[![Release](https://github.com/madstone-tech/veve-cli/actions/workflows/release.yml/badge.svg)](https://github.com/madstone-tech/veve-cli/releases)
+[![CI](https://github.com/madstone-tech/veve-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/madstone-tech/veve-cli/actions)
 [![Go Version](https://img.shields.io/badge/go-1.20+-blue)](https://golang.org)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 ```

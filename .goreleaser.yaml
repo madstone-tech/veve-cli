@@ -199,7 +199,7 @@ release:
 
     See below for a complete list of changes in this release.
 
-    **Full Changelog**: https://github.com/andhi/veve-cli/compare/{{ .PreviousTag }}...{{ .Tag }}
+    **Full Changelog**: https://github.com/madstone-tech/veve-cli/compare/{{ .PreviousTag }}...{{ .Tag }}
 
     ---
     *Transform your documentation with veve-cli*

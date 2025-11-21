@@ -52,7 +52,7 @@ For feature requests:
 
 ```bash
 # Clone the repository
-git clone https://github.com/andhi/veve-cli.git
+git clone https://github.com/madstone-tech/veve-cli.git
 cd veve-cli
 
 # Install dependencies

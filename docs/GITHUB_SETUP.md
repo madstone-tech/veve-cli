@@ -160,7 +160,7 @@ Features:
 • Shell completions (bash, zsh, fish)
 • Production-ready with 100+ tests
 
-Get started: https://github.com/andhi/veve-cli#installation
+Get started: https://github.com/madstone-tech/veve-cli#installation
 ```
 
 ### 2. Topics for Discoverability
@@ -199,7 +199,7 @@ Topics list:
 
 Set in repository settings:
 
-**Website**: `https://github.com/andhi/veve-cli` (or custom domain)
+**Website**: `https://github.com/madstone-tech/veve-cli` (or custom domain)
 
 **Documentation**: Links in README.md and sidebar
 
@@ -221,8 +221,8 @@ Convert markdown to beautiful PDFs with professional themes and Unix integration
 - 📚 100% documented
 - ✅ Production-ready
 
-[📖 Documentation](https://github.com/andhi/veve-cli#readme)
-[🚀 Quick Start](https://github.com/andhi/veve-cli#installation)
+[📖 Documentation](https://github.com/madstone-tech/veve-cli#readme)
+[🚀 Quick Start](https://github.com/madstone-tech/veve-cli#installation)
 [📝 Contributing](CONTRIBUTING.md)
 ```
 

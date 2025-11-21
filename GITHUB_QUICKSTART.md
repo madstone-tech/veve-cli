@@ -260,7 +260,7 @@ If you prefer manual setup instead of running the script:
 ### 1. Update Repository Metadata
 Visit: GitHub → Settings → General
 - Description: "Fast, themeable markdown-to-PDF converter built with Go"
-- Website: https://github.com/andhi/veve-cli
+- Website: https://github.com/madstone-tech/veve-cli
 - Topics: markdown, pdf, converter, cli, golang
 
 ### 2. Configure Branch Protection

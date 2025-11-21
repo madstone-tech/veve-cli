@@ -50,7 +50,7 @@ curl -X PATCH \
   https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO \
   -d '{
     "description": "New description",
-    "homepage": "https://github.com/andhi/veve-cli",
+    "homepage": "https://github.com/madstone-tech/veve-cli",
     "topics": ["markdown", "pdf", "cli"]
   }'
 ```

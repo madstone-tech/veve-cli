@@ -142,19 +142,19 @@ Users can download pre-built binaries from the GitHub Releases page:
 
 ```bash
 # macOS (Intel)
-curl -L https://github.com/andhi/veve-cli/releases/download/v0.2.0/veve_Darwin_x86_64.tar.gz | tar xz
+curl -L https://github.com/madstone-tech/veve-cli/releases/download/v0.2.0/veve_Darwin_x86_64.tar.gz | tar xz
 sudo mv veve /usr/local/bin/
 
 # macOS (Apple Silicon)
-curl -L https://github.com/andhi/veve-cli/releases/download/v0.2.0/veve_Darwin_arm64.tar.gz | tar xz
+curl -L https://github.com/madstone-tech/veve-cli/releases/download/v0.2.0/veve_Darwin_arm64.tar.gz | tar xz
 sudo mv veve /usr/local/bin/
 
 # Linux (AMD64)
-curl -L https://github.com/andhi/veve-cli/releases/download/v0.2.0/veve_Linux_x86_64.tar.gz | tar xz
+curl -L https://github.com/madstone-tech/veve-cli/releases/download/v0.2.0/veve_Linux_x86_64.tar.gz | tar xz
 sudo mv veve /usr/local/bin/
 
 # Linux (ARM64)
-curl -L https://github.com/andhi/veve-cli/releases/download/v0.2.0/veve_Linux_arm64.tar.gz | tar xz
+curl -L https://github.com/madstone-tech/veve-cli/releases/download/v0.2.0/veve_Linux_arm64.tar.gz | tar xz
 sudo mv veve /usr/local/bin/
 
 # Windows (Download .zip from releases page)
@@ -164,10 +164,10 @@ sudo mv veve /usr/local/bin/
 
 ```bash
 # Install specific version
-go install github.com/andhi/veve-cli/cmd/veve@v0.2.0
+go install github.com/madstone-tech/veve-cli/cmd/veve@v0.2.0
 
 # Install latest
-go install github.com/andhi/veve-cli/cmd/veve@latest
+go install github.com/madstone-tech/veve-cli/cmd/veve@latest
 ```
 
 ### From Homebrew (Optional)
@@ -198,10 +198,10 @@ Each release includes SHA256 checksums:
 
 ```bash
 # Download binary
-curl -O https://github.com/andhi/veve-cli/releases/download/v0.2.0/veve_Linux_x86_64.tar.gz
+curl -O https://github.com/madstone-tech/veve-cli/releases/download/v0.2.0/veve_Linux_x86_64.tar.gz
 
 # Download checksums
-curl -O https://github.com/andhi/veve-cli/releases/download/v0.2.0/checksums.txt
+curl -O https://github.com/madstone-tech/veve-cli/releases/download/v0.2.0/checksums.txt
 
 # Verify
 sha256sum -c checksums.txt

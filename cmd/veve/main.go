@@ -7,11 +7,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/andhi/veve-cli/internal"
-	"github.com/andhi/veve-cli/internal/config"
-	"github.com/andhi/veve-cli/internal/converter"
-	"github.com/andhi/veve-cli/internal/logging"
-	"github.com/andhi/veve-cli/internal/theme"
+	"github.com/madstone-tech/veve-cli/internal"
+	"github.com/madstone-tech/veve-cli/internal/config"
+	"github.com/madstone-tech/veve-cli/internal/converter"
+	"github.com/madstone-tech/veve-cli/internal/logging"
+	"github.com/madstone-tech/veve-cli/internal/theme"
 	"github.com/spf13/cobra"
 )
 
