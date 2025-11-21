@@ -1,0 +1,237 @@
+# GoReleaser configuration for veve-cli
+# https://goreleaser.com
+
+version: 2
+
+# Project metadata
+project_name: veve-cli
+
+# Environment variables
+env:
+  - GO111MODULE=on
+
+# Git configuration
+git:
+  # What should be used to sort tags when gathering the current and previous
+  # tags if there are more than one tag in the same commit.
+  tag_sort: -version:refname
+
+# Build configuration
+builds:
+  - id: veve
+    binary: veve
+    main: ./cmd/veve
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    # Build flags
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+      - -X main.builtBy=goreleaser
+    env:
+      - CGO_ENABLED=0
+
+# Universal binaries for macOS
+universal_binaries:
+  - id: veve_universal
+    replace: true
+    name_template: veve
+
+# Hooks to generate completions before archiving
+before:
+  hooks:
+    - go mod tidy
+    - ./scripts/generate-completions.sh
+
+# Archives configuration
+archives:
+  - id: default
+    format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - LICENSE*
+      - CHANGELOG*
+      - docs/**/*
+      - examples/**/*
+
+# Checksum
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+# Snapshot builds
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+# Changelog
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^chore:"
+      - "^style:"
+      - "merge conflict"
+      - Merge pull request
+      - Merge remote-tracking branch
+      - Merge branch
+  groups:
+    - title: "New Features"
+      regexp: "^.*feat[(\\w)]*:+.*$"
+      order: 0
+    - title: "Theme Features"
+      regexp: "^.*theme[(\\w)]*:+.*$"
+      order: 1
+    - title: "Bug Fixes"
+      regexp: "^.*fix[(\\w)]*:+.*$"
+      order: 2
+    - title: "Enhancements"
+      regexp: "^.*enhance[(\\w)]*:+.*$"
+      order: 3
+    - title: "Performance Improvements"
+      regexp: "^.*perf[(\\w)]*:+.*$"
+      order: 4
+    - title: "Refactoring"
+      regexp: "^.*refactor[(\\w)]*:+.*$"
+      order: 5
+    - title: "Other"
+      order: 999
+
+# GitHub Release
+release:
+  github:
+    owner: andhi
+    name: veve-cli
+  draft: false
+  prerelease: auto
+  mode: replace
+  header: |
+    ## veve {{ .Tag }} - Markdown to PDF Converter
+
+    Transform your Markdown documents into beautiful PDFs with powerful theme support.
+
+    ### Installation
+
+    ```bash
+    # Download the binary for your platform from the assets below
+    # Extract and install
+    tar -xzf veve_*.tar.gz
+    sudo mv veve /usr/local/bin/
+
+    # Or using Go
+    go install github.com/andhi/veve-cli/cmd/veve@{{ .Tag }}
+
+    # Or using Homebrew (when available)
+    brew tap andhi/tap
+    brew install veve
+    ```
+
+    ### Verification
+
+    ```bash
+    veve --version
+    ```
+
+    ### Quick Start
+
+    ```bash
+    # Basic conversion
+    veve input.md -o output.pdf
+
+    # With theme
+    veve input.md --theme dark -o output.pdf
+
+    # List available themes
+    veve theme list
+
+    # Create a custom theme
+    mkdir -p ~/.config/veve/themes
+    cat > ~/.config/veve/themes/custom.css << 'EOF'
+    ---
+    name: custom
+    author: Your Name
+    description: Custom theme
+    version: 1.0.0
+    ---
+    body { color: blue; }
+    EOF
+
+    # Use custom theme
+    veve input.md --theme custom -o output.pdf
+    ```
+
+  footer: |
+    ## Features
+
+    - 📄 **Markdown to PDF**: Convert markdown files to beautiful PDFs
+    - 🎨 **Themes**: Built-in and custom themes (default, dark, academic)
+    - ⚙️ **Configuration**: TOML-based configuration with XDG support
+    - 🔧 **Theme Management**: `veve theme list|add|remove`
+    - 🔀 **Unix Composability**: stdin/stdout piping support
+    - 📦 **Cross-Platform**: macOS, Linux, Windows support
+
+    ## Changes in {{ .Tag }}
+
+    See below for a complete list of changes in this release.
+
+    **Full Changelog**: https://github.com/andhi/veve-cli/compare/{{ .PreviousTag }}...{{ .Tag }}
+
+    ---
+    *Transform your documentation with veve-cli*
+
+  # Extra files to include in release
+  extra_files:
+    - glob: scripts/install-completion.sh
+      name_template: install-completion.sh
+    - glob: docs/**/*.md
+      name_template: docs/{{ .Name }}
+
+# Homebrew (macOS package manager)
+brews:
+  - repository:
+      owner: andhi
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    homepage: https://github.com/andhi/veve-cli
+    description: "Fast, themeable markdown to PDF converter with Pandoc"
+    license: MIT
+    test: |
+      system "#{bin}/veve --version"
+    install: |
+      bin.install "veve"
+
+      # Generate and install shell completions
+      bash_completion.install "completions/veve.bash" => "veve" if File.exist?("completions/veve.bash")
+      zsh_completion.install "completions/_veve" if File.exist?("completions/_veve")
+      fish_completion.install "completions/veve.fish" if File.exist?("completions/veve.fish")
+
+# Announce releases
+announce:
+  # Skip announcement for now
+  skip: true
