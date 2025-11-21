@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/andhi/veve-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/andhi/veve-cli/actions/workflows/ci.yml)
 [![Release](https://github.com/andhi/veve-cli/actions/workflows/release.yml/badge.svg)](https://github.com/andhi/veve-cli/actions/workflows/release.yml)
-[![Go Version](https://img.shields.io/badge/go-1.20+-blue)](https://golang.org)
+[![Go Version](https://img.shields.io/badge/go-1.25+-blue)](https://golang.org)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 A fast, themeable markdown-to-PDF converter built with Go. Convert your markdown files to beautiful PDFs with built-in and custom themes. Perfect for documentation, reports, and technical writing.
@@ -206,6 +206,7 @@ veve [input] [flags]
 ```
 
 Flags:
+
 - `-o, --output string` - Output PDF file path (default: input filename with .pdf extension)
 - `-t, --theme string` - Theme to use for PDF styling (default: "default")
 - `-e, --pdf-engine string` - Pandoc PDF engine to use (default: "pdflatex")
@@ -335,6 +336,7 @@ npm run build && veve content/blog/*.md -o public/pdfs/
 ```
 
 **Solution**: Install Pandoc:
+
 ```bash
 # macOS
 brew install pandoc
@@ -356,6 +358,7 @@ choco install pandoc
 ```
 
 **Solution**:
+
 1. Check theme file exists: `ls ~/.config/veve/themes/mytheme.css`
 2. Use correct theme name (without .css extension)
 3. Use full path for local themes: `veve input.md --theme /path/to/mytheme.css`
@@ -363,6 +366,7 @@ choco install pandoc
 ### Encoding issues with special characters
 
 **Solution**: Ensure your markdown file is UTF-8 encoded:
+
 ```bash
 file -i input.md  # Check encoding
 iconv -f utf-16 -t utf-8 input.md > input_utf8.md  # Convert if needed
@@ -371,6 +375,7 @@ iconv -f utf-16 -t utf-8 input.md > input_utf8.md  # Convert if needed
 ### PDF generation slow
 
 **Solution**:
+
 1. Use faster PDF engine: `--pdf-engine xelatex` (faster than pdflatex)
 2. Check Pandoc performance: `pandoc --version`
 3. Simplify CSS in theme (reduce complexity)
@@ -442,6 +447,7 @@ golangci-lint run ./...
 See [docs/RELEASE.md](docs/RELEASE.md) for detailed release instructions.
 
 Quick version:
+
 ```bash
 # Tag a release
 git tag -a v0.2.0 -m "Release v0.2.0"
@@ -461,26 +467,29 @@ git push origin v0.2.0
 
 Typical performance metrics:
 
-| Task | Time |
-|------|------|
-| Simple document (< 10 pages) | < 2 seconds |
-| Complex document (< 50 pages) | 2-5 seconds |
-| Large document (> 50 pages) | 5-10 seconds |
+| Task                          | Time         |
+| ----------------------------- | ------------ |
+| Simple document (< 10 pages)  | < 2 seconds  |
+| Complex document (< 50 pages) | 2-5 seconds  |
+| Large document (> 50 pages)   | 5-10 seconds |
 
-*Times vary based on Pandoc, PDF engine, and system performance*
+_Times vary based on Pandoc, PDF engine, and system performance_
 
 ## Compatibility
 
 ### Operating Systems
+
 - ✅ macOS (10.15+)
 - ✅ Linux (Ubuntu 18.04+, Fedora 30+, etc.)
 - ✅ Windows (10+)
 
 ### Go Versions
+
 - ✅ Go 1.20+
 - ✅ Go 1.21+
 
 ### Pandoc Versions
+
 - ✅ Pandoc 2.18+
 - ✅ Pandoc 2.19+
 - ✅ Pandoc 3.x+
