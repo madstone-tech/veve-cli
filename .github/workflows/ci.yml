@@ -21,14 +21,20 @@ jobs:
         with:
           go-version: "stable"
 
+      - name: Install Pandoc
+        run: sudo apt-get update && sudo apt-get install -y pandoc
+
       - name: Go mod tidy
         run: go mod tidy
 
       - name: Go mod verify
         run: go mod verify
 
+      - name: Build binary for tests
+        run: go build -o veve ./cmd/veve && sudo mv veve /usr/local/bin/
+
       - name: Run tests
-        run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+        run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./... -timeout 10m
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
