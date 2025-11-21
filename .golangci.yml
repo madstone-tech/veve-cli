@@ -1,29 +1,19 @@
 ---
+version: "2"
+
 run:
   timeout: 5m
-  go: "1.20"
+  go: "1.25"
 
 linters:
   enable:
-    - gofmt
-    - goimports
     - govet
-    - errcheck
     - ineffassign
-    - unconvert
+  disable:
+    - errcheck
     - unused
-    - gosimple
     - staticcheck
-    - misspell
 
-linters-settings:
-  gofmt:
-    simplify: true
-  goimports:
-    local-prefixes: "github.com/andhi/veve-cli"
-
-issues:
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - errcheck
+formatters:
+  enable:
+    - gofmt

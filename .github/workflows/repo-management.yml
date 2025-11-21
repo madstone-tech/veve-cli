@@ -3,7 +3,7 @@ name: Repository Management
 on:
   schedule:
     # Run daily at 2 AM UTC
-    - cron: '0 2 * * *'
+    - cron: "0 2 * * *"
   workflow_dispatch:
 
 jobs:
@@ -24,7 +24,7 @@ jobs:
             -H "Accept: application/vnd.github.v3+json" \
             "https://api.github.com/repos/${{ github.repository }}/issues?state=open&sort=updated&direction=asc&per_page=100" \
             | jq '[.[] | select(.updated_at < (now - 30*24*3600))] | length')
-          
+
           if [ "$STALE_ISSUES" -gt 0 ]; then
             echo "⚠️ Found $STALE_ISSUES stale issues (not updated in 30+ days)"
           else
@@ -41,7 +41,7 @@ jobs:
             -H "Accept: application/vnd.github.v3+json" \
             "https://api.github.com/repos/${{ github.repository }}/pulls?state=open&per_page=100" \
             | jq 'length')
-          
+
           echo "ℹ️ Open pull requests: $OPEN_PRS"
 
       - name: Check repository statistics
@@ -53,11 +53,11 @@ jobs:
             -H "Authorization: token $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
             "https://api.github.com/repos/${{ github.repository }}")
-          
+
           STARS=$(echo "$REPO_INFO" | jq '.stargazers_count')
           FORKS=$(echo "$REPO_INFO" | jq '.forks_count')
           WATCHERS=$(echo "$REPO_INFO" | jq '.watchers_count')
-          
+
           echo "📊 Repository Statistics:"
           echo "  ⭐ Stars: $STARS"
           echo "  🍴 Forks: $FORKS"
@@ -79,7 +79,7 @@ jobs:
             -H "Accept: application/vnd.github.v3+json" \
             "https://api.github.com/repos/${{ github.repository }}/branches/main/protection" \
             | jq '.enabled // .required_status_checks.strict')
-          
+
           if [ "$PROTECTION" != "null" ]; then
             echo "✓ Main branch protection is configured"
           else
@@ -114,7 +114,7 @@ jobs:
                 "document-conversion"
               ]
             }'
-          
+
           echo "✓ Repository topics updated for SEO"
 
   dependency-check:
