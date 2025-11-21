@@ -163,7 +163,7 @@ None at this time. Please report issues at <https://github.com/madstone-tech/vev
 
 ## Credits
 
-Created by [andhi](https://github.com/andhi)
+Created by [Madstone Technology](https://github.com/madstone-tech)
 
 ## License
 
@@ -194,7 +194,6 @@ Potential features for future releases:
 - Plugin system for custom processors
 - API server mode
 - Docker image
-- VS Code extension
 
 ---
 
