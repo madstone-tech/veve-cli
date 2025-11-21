@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### Core Features
+
 - **Markdown to PDF Conversion** - Fast, reliable conversion using Pandoc
   - Support for complex markdown with code blocks, tables, and math
   - Multiple PDF engine support (pdflatex, xelatex, lualatex)
@@ -31,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - View theme info: `veve theme info <name>`
 
 #### Unix Composability
+
 - **stdin/stdout Support** - Full Unix pipe compatibility
   - Read markdown from stdin: `cat input.md | veve`
   - Output PDF to stdout: `veve input.md | cat > output.pdf`
@@ -48,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 71: File creation failed
 
 #### Shell Integration
+
 - **Shell Completions** - First-class shell support
   - Bash completion script
   - Zsh completion script
@@ -61,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Windows: `%APPDATA%\veve\`
 
 #### Professional Tooling
+
 - **Release Infrastructure** - Automated builds and distribution
   - GoReleaser configuration for cross-platform builds
   - GitHub Actions CI/CD workflow
@@ -133,7 +137,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version Information
 
-- **Language**: Go 1.20+
+- **Language**: Go 1.25+
 - **Dependencies**: Pandoc 2.18+
 - **Platforms**: macOS (10.15+), Linux (18.04+), Windows (10+)
 - **Architecture**: amd64, arm64
@@ -155,7 +159,7 @@ This is the first public release of veve-cli. No migration needed.
 
 ## Known Issues
 
-None at this time. Please report issues at https://github.com/andhi/veve-cli/issues
+None at this time. Please report issues at <https://github.com/madstone-tech/veve-cli/issues>
 
 ## Credits
 
@@ -172,18 +176,21 @@ MIT License - See LICENSE file for details
 Potential features for future releases:
 
 ### v0.3.0 (Planned)
+
 - Theme marketplace and online theme browser
 - Built-in theme previewing
 - Template support (cover pages, headers, footers)
 - Output file optimization (compression)
 
 ### v0.4.0 (Planned)
+
 - Web UI for drag-and-drop conversion
 - Real-time preview of theme changes
 - Batch conversion GUI
 - Theme editor with live preview
 
 ### v1.0.0 (Planned)
+
 - Plugin system for custom processors
 - API server mode
 - Docker image
