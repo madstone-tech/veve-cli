@@ -1,7 +1,7 @@
 # veve-cli - Markdown to PDF Converter with Theme Support
 
-[![CI](https://github.com/andhi/veve-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/andhi/veve-cli/actions/workflows/ci.yml)
-[![Release](https://github.com/andhi/veve-cli/actions/workflows/release.yml/badge.svg)](https://github.com/andhi/veve-cli/actions/workflows/release.yml)
+[![CI](https://github.com/madstone-tech/veve-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/madstone-tech/veve-cli/actions/workflows/ci.yml)
+[![Release](https://github.com/madstone-tech/veve-cli/actions/workflows/release.yml/badge.svg)](https://github.com/madstone-tech/veve-cli/actions/workflows/release.yml)
 [![Go Version](https://img.shields.io/badge/go-1.25+-blue)](https://golang.org)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -24,7 +24,7 @@ A fast, themeable markdown-to-PDF converter built with Go. Convert your markdown
 ### macOS (Homebrew - Recommended)
 
 ```bash
-brew tap andhi/tap
+brew tap madstone-tech/tap
 brew install veve
 ```
 
@@ -36,11 +36,11 @@ Shell completions are automatically installed with Homebrew.
 
 ```bash
 # AMD64
-curl -sL https://github.com/andhi/veve-cli/releases/latest/download/veve_Linux_x86_64.tar.gz | tar xz
+curl -sL https://github.com/madstone-tech/veve-cli/releases/latest/download/veve_Linux_x86_64.tar.gz | tar xz
 sudo mv veve /usr/local/bin/
 
 # ARM64
-curl -sL https://github.com/andhi/veve-cli/releases/latest/download/veve_Linux_arm64.tar.gz | tar xz
+curl -sL https://github.com/madstone-tech/veve-cli/releases/latest/download/veve_Linux_arm64.tar.gz | tar xz
 sudo mv veve /usr/local/bin/
 ```
 
@@ -56,16 +56,16 @@ sudo dnf install veve
 
 ### Windows
 
-Download the latest `.zip` file from [releases](https://github.com/andhi/veve-cli/releases/latest), extract it, and add the folder to your PATH.
+Download the latest `.zip` file from [releases](https://github.com/madstone-tech/veve-cli/releases/latest), extract it, and add the folder to your PATH.
 
 ### From Go
 
 ```bash
 # Latest version
-go install github.com/andhi/veve-cli/cmd/veve@latest
+go install github.com/madstone-tech/veve-cli/cmd/veve@latest
 
 # Specific version
-go install github.com/andhi/veve-cli/cmd/veve@v0.1.0
+go install github.com/madstone-tech/veve-cli/cmd/veve@v0.1.0
 ```
 
 ## Quick Start
@@ -384,7 +384,7 @@ iconv -f utf-16 -t utf-8 input.md > input_utf8.md  # Convert if needed
 
 ### Prerequisites
 
-- Go 1.20 or later
+- Go 1.25 or later
 - Pandoc 2.18 or later
 - Git
 
@@ -392,7 +392,7 @@ iconv -f utf-16 -t utf-8 input.md > input_utf8.md  # Convert if needed
 
 ```bash
 # Clone repository
-git clone https://github.com/andhi/veve-cli.git
+git clone https://github.com/madstone-tech/veve-cli.git
 cd veve-cli
 
 # Build
@@ -429,7 +429,7 @@ Contributions welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guideli
 
 ```bash
 # Clone and setup
-git clone https://github.com/andhi/veve-cli.git
+git clone https://github.com/madstone-tech/veve-cli.git
 cd veve-cli
 
 # Install dependencies
@@ -507,8 +507,8 @@ MIT License - see [LICENSE](LICENSE) for details
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/andhi/veve-cli/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/andhi/veve-cli/discussions)
+- **Issues**: [GitHub Issues](https://github.com/madstone-tech/veve-cli/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/madstone-tech/veve-cli/discussions)
 - **Documentation**: See `/docs` directory
 
 ## Roadmap
@@ -517,13 +517,9 @@ MIT License - see [LICENSE](LICENSE) for details
 - [ ] Built-in theme marketplace
 - [ ] Docker image
 - [ ] Package managers (apt, rpm, brew, etc.)
-- [ ] VS Code extension for theme development
 - [ ] Template variables (author, date, etc.)
-- [ ] Batch processing UI
 - [ ] PDF merge capability
 
 ---
-
-Made with ❤️ by the veve-cli team
 
 **Transform your documentation with veve-cli** 📄✨

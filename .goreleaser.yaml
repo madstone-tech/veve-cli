@@ -125,7 +125,7 @@ changelog:
 # GitHub Release
 release:
   github:
-    owner: andhi
+    owner: madstone-tech
     name: veve-cli
   draft: false
   prerelease: auto
@@ -144,10 +144,10 @@ release:
     sudo mv veve /usr/local/bin/
 
     # Or using Go
-    go install github.com/andhi/veve-cli/cmd/veve@{{ .Tag }}
+    go install github.com/madstone-tech/veve-cli/cmd/veve@{{ .Tag }}
 
     # Or using Homebrew (when available)
-    brew tap andhi/tap
+    brew tap madstone-tech/tap
     brew install veve
     ```
 
@@ -214,11 +214,11 @@ release:
 # Homebrew (macOS package manager)
 brews:
   - repository:
-      owner: andhi
+      owner: madstone-tech
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     directory: Formula
-    homepage: https://github.com/andhi/veve-cli
+    homepage: https://github.com/madstone-tech/veve-cli
     description: "Fast, themeable markdown to PDF converter with Pandoc"
     license: MIT
     test: |
