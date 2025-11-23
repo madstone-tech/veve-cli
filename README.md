@@ -407,8 +407,51 @@ veve --version
 
 ### Development
 
+This project uses [Task](https://taskfile.dev/) to streamline common development workflows. Install Task if you haven't already:
+
 ```bash
+# macOS
+brew install go-task/tap/go-task
+
+# Linux
+sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d
+
+# Or via Go
+go install github.com/go-task/task/v3/cmd/task@latest
+```
+
+Then use Task for common operations:
+
+```bash
+# Setup development environment
+task dev-setup
+
 # Run tests
+task test                 # All tests with race detector
+task test-unit            # Unit tests only
+task test-contract        # Contract tests only
+task test-coverage        # Tests with coverage report
+
+# Code quality
+task fmt                  # Format with gofmt
+task lint                 # Run linter
+task precommit            # Run all pre-commit checks
+
+# Build and install
+task build                # Build binary
+task install              # Build and install to /usr/local/bin
+task uninstall            # Remove installation
+
+# See all available tasks
+task --list-all
+```
+
+For detailed information, see [TASKFILE_GUIDE.md](TASKFILE_GUIDE.md).
+
+Traditional Go commands still work:
+
+```bash
+# Run tests directly
 go test ./...
 
 # Run with coverage

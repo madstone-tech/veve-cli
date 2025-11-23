@@ -66,6 +66,7 @@ go.sum
 # Project related files
 PROJECT_SUMMARY.md
 
+*.pdf
 specs/
 docs/RELEASE.md
 docs/GITHUB_SETUP.md
