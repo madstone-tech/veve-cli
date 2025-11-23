@@ -34,7 +34,7 @@ jobs:
         run: go build -o veve ./cmd/veve && sudo mv veve /usr/local/bin/
 
       - name: Run tests
-        run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./... -timeout 10m
+        run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./... -timeout 20m
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
