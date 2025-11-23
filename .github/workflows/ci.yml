@@ -22,7 +22,11 @@ jobs:
           go-version: "stable"
 
       - name: Install Pandoc
-        run: sudo apt-get update && sudo apt-get install -y pandoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pandoc
+          which pandoc
+          pandoc --version
 
       - name: Go mod tidy
         run: go mod tidy
@@ -31,7 +35,11 @@ jobs:
         run: go mod verify
 
       - name: Build binary for tests
-        run: go build -o veve ./cmd/veve && sudo mv veve /usr/local/bin/
+        run: |
+          go build -o veve ./cmd/veve
+          sudo mv veve /usr/local/bin/
+          which veve
+          veve --version
 
       - name: Run tests
         run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./... -timeout 20m
