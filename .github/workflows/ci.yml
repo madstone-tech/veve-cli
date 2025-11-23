@@ -21,12 +21,14 @@ jobs:
         with:
           go-version: "stable"
 
-      - name: Install Pandoc
+      - name: Install Pandoc and LaTeX
         run: |
           sudo apt-get update
-          sudo apt-get install -y pandoc
+          sudo apt-get install -y pandoc texlive-latex-base texlive-latex-extra
           which pandoc
           pandoc --version
+          which pdflatex
+          pdflatex --version | head -3
 
       - name: Go mod tidy
         run: go mod tidy
