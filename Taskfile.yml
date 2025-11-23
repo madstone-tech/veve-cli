@@ -1,0 +1,210 @@
+version: '3'
+
+vars:
+  BINARY_NAME: veve
+  MAIN_PKG: ./cmd/veve
+  VERSION: dev
+  INSTALL_PATH: /usr/local/bin
+
+tasks:
+  default:
+    desc: Show all available tasks
+    cmds:
+      - task --list-all
+
+  dev:
+    desc: Setup development environment
+    cmds:
+      - go mod download
+      - go mod tidy
+
+  run:
+    desc: Run veve-cli from source
+    cmds:
+      - go run {{ .MAIN_PKG }}/main.go
+
+  build:
+    desc: Build veve-cli binary locally
+    cmds:
+      - go build -v -ldflags="-X main.Version={{ .VERSION }}" -o {{ .BINARY_NAME }} {{ .MAIN_PKG }}
+      - ./{{ .BINARY_NAME }} --version
+
+  build-release:
+    desc: Build optimized release binary
+    cmds:
+      - go build -ldflags="-s -w -X main.Version={{ .VERSION }}" -o {{ .BINARY_NAME }} {{ .MAIN_PKG }}
+      - ls -lh {{ .BINARY_NAME }}
+
+  clean:
+    desc: Remove build artifacts and test binaries
+    cmds:
+      - rm -f {{ .BINARY_NAME }}
+      - rm -f ./coverage.out coverage.html
+      - go clean -cache -testcache
+      - find . -name "*.test" -type f -delete
+
+  test:
+    desc: Run all tests with race detector (includes contract tests - can be slow)
+    cmds:
+      - go test -v -race -timeout 300s ./...
+
+  test-unit:
+    desc: Run unit tests only
+    cmds:
+      - go test -v -short ./internal/...
+
+  test-contract:
+    desc: Run contract tests only (these can be slow)
+    cmds:
+      - go test -v -timeout 300s ./tests/contract/...
+
+  test-coverage:
+    desc: Run tests with coverage report
+    cmds:
+      - go test -v -timeout 300s -coverprofile=coverage.out ./...
+      - go tool cover -html=coverage.out -o coverage.html
+      - go tool cover -func=coverage.out | tail -1
+
+  test-theme:
+    desc: Run theme-specific tests (metadata, fonts, parsing)
+    cmds:
+      - go test -v -timeout 300s -run "Theme|Custom|Metadata|Font" ./tests/contract
+
+  test-quick:
+    desc: Run quick tests only (skip slow contract tests)
+    cmds:
+      - go test -v -timeout 60s ./internal/...
+
+  test-verbose:
+    desc: Run tests with verbose output
+    cmds:
+      - go test -v -timeout 300s ./...
+
+  precommit:
+    desc: Run pre-commit checks (format, lint, quick tests)
+    cmds:
+      - task: fmt
+      - task: lint
+      - task: test-quick
+
+  fmt:
+    desc: Format code with gofmt
+    cmds:
+      - gofmt -w .
+
+  fmt-check:
+    desc: Check if code is properly formatted
+    cmds:
+      - bash -c 'test -z "$$(gofmt -l .)"'
+
+  lint:
+    desc: Run golangci-lint linter
+    cmds:
+      - bash -c 'command -v golangci-lint >/dev/null || go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest'
+      - golangci-lint run ./...
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
+
+  install:
+    desc: Build and install veve-cli to system
+    cmds:
+      - task: build
+      - mkdir -p {{ .INSTALL_PATH }}
+      - cp {{ .BINARY_NAME }} {{ .INSTALL_PATH }}/{{ .BINARY_NAME }}
+      - chmod +x {{ .INSTALL_PATH }}/{{ .BINARY_NAME }}
+
+  install-verify:
+    desc: Verify veve-cli is installed
+    cmds:
+      - bash -c 'command -v {{ .BINARY_NAME }} && {{ .BINARY_NAME }} --version'
+
+  uninstall:
+    desc: Remove veve-cli from system
+    cmds:
+      - rm -f {{ .INSTALL_PATH }}/{{ .BINARY_NAME }}
+
+  uninstall-full:
+    desc: Remove veve-cli and all config
+    cmds:
+      - rm -f {{ .INSTALL_PATH }}/{{ .BINARY_NAME }}
+      - rm -rf ~/.config/veve
+
+  config-init:
+    desc: Initialize veve config directory
+    cmds:
+      - mkdir -p ~/.config/veve/themes
+
+  config-show:
+    desc: Show veve config location
+    cmds:
+      - ls -la ~/.config/veve
+
+  config-clean:
+    desc: Remove veve config
+    cmds:
+      - rm -rf ~/.config/veve
+
+  themes-list:
+    desc: List available themes
+    cmds:
+      - veve theme list
+
+  themes-install:
+    desc: Install theme from file (FILE=path/to/theme.css)
+    cmds:
+      - mkdir -p ~/.config/veve/themes
+      - cp "{{ .FILE }}" ~/.config/veve/themes/
+
+  docs:
+    desc: Show theme development guide
+    cmds:
+      - less docs/THEME_DEVELOPMENT.md
+
+  help:
+    desc: Show veve-cli help
+    cmds:
+      - veve --help
+
+  version:
+    desc: Show veve-cli version
+    cmds:
+      - veve --version
+
+  all:
+    desc: Format, lint, test, and build
+    cmds:
+      - task: fmt
+      - task: lint
+      - task: test
+      - task: build
+
+  ci:
+    desc: Run CI pipeline checks
+    cmds:
+      - task: fmt-check
+      - task: vet
+      - task: lint
+      - task: test
+
+  dev-setup:
+    desc: Setup complete development environment
+    cmds:
+      - task: dev
+      - task: config-init
+      - task: build
+
+  distclean:
+    desc: Deep clean everything except source
+    cmds:
+      - task: clean
+      - rm -rf vendor/
+      - go clean -modcache
+
+  reset:
+    desc: Reset to pristine state
+    cmds:
+      - task: distclean
+      - task: dev

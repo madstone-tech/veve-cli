@@ -17,9 +17,18 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.20'
+          go-version: "stable"
+
+      - name: Install Pandoc and LaTeX
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pandoc texlive-latex-base texlive-latex-extra
+          which pandoc
+          pandoc --version
+          which pdflatex
+          pdflatex --version | head -3
 
       - name: Go mod tidy
         run: go mod tidy
@@ -27,8 +36,22 @@ jobs:
       - name: Go mod verify
         run: go mod verify
 
+      - name: Build and install veve binary
+        run: |
+          go build -o veve ./cmd/veve
+          chmod +x veve
+          ./veve --version
+          mkdir -p $HOME/.local/bin
+          mv veve $HOME/.local/bin/veve
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          
+      - name: Verify veve installation
+        run: |
+          which veve
+          veve --version
+
       - name: Run tests
-        run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+        run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./... -timeout 20m
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
@@ -44,9 +67,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.20'
+          go-version: "stable"
 
       - name: Build
         run: go build -v ./cmd/veve
@@ -59,11 +82,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.20'
+          go-version: "stable"
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v7
-        with:
-          version: v1.54.2
+        uses: golangci/golangci-lint-action@v9

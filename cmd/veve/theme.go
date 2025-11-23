@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"text/tabwriter"
 
-	"github.com/andhi/veve-cli/internal/config"
-	"github.com/andhi/veve-cli/internal/theme"
+	"github.com/madstone-tech/veve-cli/internal/config"
+	"github.com/madstone-tech/veve-cli/internal/theme"
 	"github.com/spf13/cobra"
 )
 

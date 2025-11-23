@@ -1,4 +1,4 @@
-module github.com/andhi/veve-cli
+module github.com/madstone-tech/veve-cli
 
 go 1.25.3
 

@@ -1,0 +1,141 @@
+name: Repository Management
+
+on:
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+jobs:
+  repo-health-check:
+    runs-on: ubuntu-latest
+    name: Check Repository Health
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for stale issues
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Find issues open for more than 30 days without updates
+          STALE_ISSUES=$(curl -s \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/issues?state=open&sort=updated&direction=asc&per_page=100" \
+            | jq '[.[] | select(.updated_at < (now - 30*24*3600))] | length')
+
+          if [ "$STALE_ISSUES" -gt 0 ]; then
+            echo "⚠️ Found $STALE_ISSUES stale issues (not updated in 30+ days)"
+          else
+            echo "✓ No stale issues found"
+          fi
+
+      - name: Check pull request status
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Check open pull requests
+          OPEN_PRS=$(curl -s \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls?state=open&per_page=100" \
+            | jq 'length')
+
+          echo "ℹ️ Open pull requests: $OPEN_PRS"
+
+      - name: Check repository statistics
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get repository info
+          REPO_INFO=$(curl -s \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}")
+
+          STARS=$(echo "$REPO_INFO" | jq '.stargazers_count')
+          FORKS=$(echo "$REPO_INFO" | jq '.forks_count')
+          WATCHERS=$(echo "$REPO_INFO" | jq '.watchers_count')
+
+          echo "📊 Repository Statistics:"
+          echo "  ⭐ Stars: $STARS"
+          echo "  🍴 Forks: $FORKS"
+          echo "  👁️ Watchers: $WATCHERS"
+
+  validate-branch-protection:
+    runs-on: ubuntu-latest
+    name: Validate Branch Protection
+    if: always()
+
+    steps:
+      - name: Verify main branch protection
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Check if main branch has protection
+          PROTECTION=$(curl -s \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/branches/main/protection" \
+            | jq '.enabled // .required_status_checks.strict')
+
+          if [ "$PROTECTION" != "null" ]; then
+            echo "✓ Main branch protection is configured"
+          else
+            echo "⚠️ Main branch protection may not be configured"
+          fi
+
+  update-repository-topics:
+    runs-on: ubuntu-latest
+    name: Ensure Repository Topics
+    if: github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Update topics for SEO
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -X PUT \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/topics" \
+            -d '{
+              "names": [
+                "markdown",
+                "pdf",
+                "converter",
+                "cli",
+                "golang",
+                "pandoc",
+                "themes",
+                "pdf-generation",
+                "command-line-tool",
+                "document-conversion"
+              ]
+            }'
+
+          echo "✓ Repository topics updated for SEO"
+
+  dependency-check:
+    runs-on: ubuntu-latest
+    name: Check Dependencies
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check Go dependencies
+        run: |
+          if [ -f go.mod ]; then
+            echo "📦 Go Module: go.mod"
+            echo ""
+            echo "Dependency count:"
+            go list -m all | wc -l
+          fi
+
+      - name: List outdated packages
+        run: |
+          if [ -f go.mod ]; then
+            echo "Checking for outdated packages..."
+            go list -u -m all | grep -v "indirect" || echo "✓ All packages up to date"
+          fi
