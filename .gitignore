@@ -67,6 +67,7 @@ go.sum
 PROJECT_SUMMARY.md
 
 *.pdf
+GITHUB_QUICKSTART.md
 specs/
 docs/RELEASE.md
 docs/GITHUB_SETUP.md
