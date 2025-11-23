@@ -34,10 +34,17 @@ jobs:
       - name: Go mod verify
         run: go mod verify
 
-      - name: Build binary for tests
+      - name: Build and install veve binary
         run: |
           go build -o veve ./cmd/veve
-          sudo mv veve /usr/local/bin/
+          chmod +x veve
+          ./veve --version
+          mkdir -p $HOME/.local/bin
+          mv veve $HOME/.local/bin/veve
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          
+      - name: Verify veve installation
+        run: |
           which veve
           veve --version
 
