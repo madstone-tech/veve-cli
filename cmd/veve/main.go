@@ -233,18 +233,26 @@ func performConversion(inputFile, outputFile, themeName, pdfEngine string, quiet
 				defer os.Remove(tempProcessedFile) // Clean up temp file after conversion
 			}
 
-			// Log image download summary
-			imageMap := imageProcessor.GetImageMap()
-			downloadErrors := imageProcessor.GetDownloadErrors()
+			// Log image download summary with detailed error reporting
+			successful, failed, total := imageProcessor.GetDownloadStats()
 			if !quiet {
-				if len(imageMap) > 0 {
-					logger.Info("Downloaded %d remote images for conversion", len(imageMap))
-				}
-				if len(downloadErrors) > 0 {
-					logger.Warn("Failed to download %d images (will use original URLs): ", len(downloadErrors))
-					for url, errMsg := range downloadErrors {
-						logger.Warn("  - %s: %s", url, errMsg)
+				if total > 0 {
+					if failed == 0 {
+						// All succeeded
+						logger.Info("Successfully downloaded %d image(s)", successful)
+					} else if successful == 0 {
+						// All failed
+						logger.Warn("Failed to download %d image(s)", failed)
+					} else {
+						// Partial success
+						logger.Info("Downloaded %d of %d image(s)", successful, total)
 					}
+				}
+
+				// Log detailed error information
+				if failed > 0 {
+					errorSummary := imageProcessor.GetErrorSummary()
+					logger.Warn(errorSummary)
 				}
 			}
 		}
