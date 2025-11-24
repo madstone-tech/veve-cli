@@ -2,6 +2,7 @@ package converter_test
 
 import (
 	"net/http"
+	"path/filepath"
 	"os"
 	"testing"
 	"time"
@@ -894,6 +895,198 @@ func TestErrorMessageFormatting(t *testing.T) {
 				if _, exists := downloadErrors[imageURL]; !exists {
 					t.Error("Expected error in downloadErrors map")
 				}
+			}
+		})
+	}
+}
+
+// ============================================================================
+// T040: Cleanup File Removal Unit Tests
+// ============================================================================
+
+func TestCleanupFileRemoval(t *testing.T) {
+	tempDir := t.TempDir()
+	processor := converter.NewImageProcessor(tempDir)
+
+	// Create some dummy temp files and add them to imageMap
+	file1, _ := os.CreateTemp(tempDir, "test1-*.png")
+	file2, _ := os.CreateTemp(tempDir, "test2-*.jpg")
+	file1Path := file1.Name()
+	file2Path := file2.Name()
+	file1.Close()
+	file2.Close()
+
+	// Add files to imageMap
+	processor.SetImageMap("https://example.com/image1.png", file1Path)
+	processor.SetImageMap("https://example.com/image2.jpg", file2Path)
+
+	// Verify files exist
+	if _, err := os.Stat(file1Path); err != nil {
+		t.Fatalf("File 1 should exist: %v", err)
+	}
+	if _, err := os.Stat(file2Path); err != nil {
+		t.Fatalf("File 2 should exist: %v", err)
+	}
+
+	// Call cleanup
+	err := processor.Cleanup()
+	if err != nil {
+		t.Errorf("Cleanup returned error: %v", err)
+	}
+
+	// Verify files are deleted
+	if _, err := os.Stat(file1Path); err == nil {
+		t.Error("File 1 should be deleted after cleanup")
+	}
+	if _, err := os.Stat(file2Path); err == nil {
+		t.Error("File 2 should be deleted after cleanup")
+	}
+}
+
+// ============================================================================
+// T041: Cleanup with Missing Files Unit Tests
+// ============================================================================
+
+func TestCleanupWithMissingFiles(t *testing.T) {
+	tempDir := t.TempDir()
+	processor := converter.NewImageProcessor(tempDir)
+
+	// Add paths to non-existent files
+	processor.SetImageMap("https://example.com/missing1.png", filepath.Join(tempDir, "missing1.png"))
+	processor.SetImageMap("https://example.com/missing2.jpg", filepath.Join(tempDir, "missing2.jpg"))
+
+	// Cleanup should not error even though files don't exist
+	err := processor.Cleanup()
+	if err != nil {
+		t.Errorf("Cleanup should not error with missing files, got: %v", err)
+	}
+
+	// Verify imageMap is still accessible (cleanup doesn't clear it)
+	imageMap := processor.GetImageMap()
+	if len(imageMap) != 2 {
+		t.Errorf("ImageMap should still have entries after cleanup")
+	}
+}
+
+// ============================================================================
+// T042: Disk Space Tracking Unit Tests
+// ============================================================================
+
+func TestDiskSpaceTracking(t *testing.T) {
+
+	tests := []struct {
+		name            string
+		downloads       []int64 // sizes in bytes
+		shouldAllSucceed bool
+		testDesc        string
+	}{
+		{
+			name:            "within_limit",
+			downloads:       []int64{50 * 1024 * 1024, 150 * 1024 * 1024, 200 * 1024 * 1024},
+			shouldAllSucceed: true,
+			testDesc:        "Downloads within 500MB limit should all succeed",
+		},
+		{
+			name:            "exceed_limit",
+			downloads:       []int64{50 * 1024 * 1024, 150 * 1024 * 1024, 200 * 1024 * 1024, 150 * 1024 * 1024},
+			shouldAllSucceed: false,
+			testDesc:        "Fourth download should fail (exceeds 500MB limit)",
+		},
+		{
+			name:            "at_limit",
+			downloads:       []int64{250 * 1024 * 1024, 250 * 1024 * 1024},
+			shouldAllSucceed: true,
+			testDesc:        "Downloads totaling exactly 500MB should succeed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			processor := converter.NewImageProcessor(tempDir)
+
+			successCount := 0
+			for _, size := range tt.downloads {
+				err := processor.ValidateImageSize(size)
+				if err == nil {
+					successCount++
+					// Simulate successful download
+					processor.RecordDownload(size)
+				}
+			}
+
+			if tt.shouldAllSucceed {
+				if successCount != len(tt.downloads) {
+					t.Errorf("%s: expected all %d downloads to succeed, %d succeeded",
+						tt.testDesc, len(tt.downloads), successCount)
+				}
+			} else {
+				if successCount == len(tt.downloads) {
+					t.Errorf("%s: expected some downloads to fail, all succeeded",
+						tt.testDesc)
+				}
+			}
+		})
+	}
+}
+
+// ============================================================================
+// T043: Per-Image Size Validation Unit Tests
+// ============================================================================
+
+func TestPerImageSizeValidation(t *testing.T) {
+	tempDir := t.TempDir()
+	processor := converter.NewImageProcessor(tempDir)
+
+	mock := testutil.NewMockHTTPServer()
+	defer mock.Close()
+
+	tests := []struct {
+		name         string
+		setupHandler func(string, *testutil.MockHTTPServer)
+		shouldFail   bool
+		testDesc     string
+	}{
+		{
+			name: "normal_size_image",
+			setupHandler: func(path string, mock *testutil.MockHTTPServer) {
+				mock.RegisterImage(path, "png")
+			},
+			shouldFail: false,
+			testDesc:   "Normal size images should download",
+		},
+		{
+			name: "oversized_image",
+			setupHandler: func(path string, mock *testutil.MockHTTPServer) {
+				// Create a large body (over 100MB)
+				largeBody := make([]byte, 101*1024*1024)
+				mock.RegisterResponse(path, http.StatusOK, "image/png", largeBody)
+			},
+			shouldFail: true,
+			testDesc:   "Images over 100MB should be rejected",
+		},
+		{
+			name: "boundary_size_100mb",
+			setupHandler: func(path string, mock *testutil.MockHTTPServer) {
+				// Exactly 100MB should be OK
+				body := make([]byte, 100*1024*1024)
+				mock.RegisterResponse(path, http.StatusOK, "image/png", body)
+			},
+			shouldFail: false,
+			testDesc:   "Images exactly 100MB should be allowed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := "/" + tt.name + ".png"
+			tt.setupHandler(path, mock)
+
+			imageURL := mock.ImageURL(path)
+			_, err := processor.DownloadImageOnce(imageURL)
+
+			if (err != nil) != tt.shouldFail {
+				t.Errorf("%s: got error %v, shouldFail %v", tt.testDesc, err, tt.shouldFail)
 			}
 		})
 	}
