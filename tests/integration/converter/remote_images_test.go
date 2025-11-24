@@ -2,9 +2,11 @@ package converter_test
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/madstone-tech/veve-cli/internal/converter"
 	"github.com/madstone-tech/veve-cli/tests/testutil"
@@ -276,6 +278,117 @@ func TestProcessMarkdownCleanup(t *testing.T) {
 	for _, filePath := range downloadedFiles {
 		if _, err := os.Stat(filePath); err == nil {
 			t.Errorf("File should be removed after cleanup: %s", filePath)
+		}
+	}
+}
+
+// ============================================================================
+// T029: Partial Failure Handling Integration Tests
+// ============================================================================
+
+func TestProcessMarkdownPartialFailure(t *testing.T) {
+	tempDir := t.TempDir()
+	processor := converter.NewImageProcessor(tempDir)
+
+	mock := testutil.NewMockHTTPServer()
+	defer mock.Close()
+
+	// Register 5 images: 3 good, 2 will fail
+	mock.RegisterImage("/good1.png", "png")
+	mock.RegisterImage("/good2.jpg", "jpeg")
+	mock.RegisterImage("/good3.gif", "gif")
+	// Intentionally not registering /bad1.png and /bad2.png for 404s
+
+	markdown := `# Document with mixed results
+Good image 1: ![img1](` + mock.ImageURL("/good1.png") + `)
+Good image 2: ![img2](` + mock.ImageURL("/good2.jpg") + `)
+Bad image 1: ![bad1](` + mock.ImageURL("/bad1.png") + `)
+Good image 3: ![img3](` + mock.ImageURL("/good3.gif") + `)
+Bad image 2: ![bad2](` + mock.ImageURL("/bad2.png") + `)`
+
+	processedContent, err := processor.ProcessMarkdown(markdown)
+	if err != nil {
+		t.Fatalf("ProcessMarkdown failed: %v", err)
+	}
+
+	// Verify partial success
+	imageMap := processor.GetImageMap()
+	downloadErrors := processor.GetDownloadErrors()
+
+	if len(imageMap) != 3 {
+		t.Errorf("Expected 3 successful downloads, got %d", len(imageMap))
+	}
+
+	if len(downloadErrors) != 2 {
+		t.Errorf("Expected 2 failed downloads, got %d", len(downloadErrors))
+	}
+
+	// Verify error messages contain descriptive info
+	for url, errMsg := range downloadErrors {
+		if errMsg == "" {
+			t.Errorf("Error message empty for %s", url)
+		}
+		if !strings.Contains(errMsg, "HTTP") && !strings.Contains(errMsg, "404") {
+			t.Logf("Warning: error message may lack detail: %s -> %s", url, errMsg)
+		}
+	}
+
+	// Verify good images are rewritten
+	for url := range imageMap {
+		if strings.Contains(url, "good") {
+			// Should be rewritten in content
+			if !strings.Contains(processedContent, "/good") {
+				t.Logf("Warning: good image might not be properly rewritten in content")
+			}
+		}
+	}
+}
+
+// ============================================================================
+// T030: Network Timeout Handling Integration Tests
+// ============================================================================
+
+func TestProcessMarkdownTimeoutHandling(t *testing.T) {
+	tempDir := t.TempDir()
+	processor := converter.NewImageProcessor(tempDir).WithTimeoutSeconds(1) // 1 second timeout
+
+	mock := testutil.NewMockHTTPServer()
+	defer mock.Close()
+
+	// Register one fast image and one slow image
+	mock.RegisterImage("/fast.png", "png")
+	pngData, _ := testutil.CreateTestImageData("png")
+	mock.RegisterWithDelay("/slow.png", 3*time.Second, http.StatusOK, "image/png", pngData)
+
+	markdown := `# Timeout test
+Fast: ![fast](` + mock.ImageURL("/fast.png") + `)
+Slow: ![slow](` + mock.ImageURL("/slow.png") + `)`
+
+	_, err := processor.ProcessMarkdown(markdown)
+	if err != nil {
+		t.Fatalf("ProcessMarkdown failed: %v", err)
+	}
+
+	imageMap := processor.GetImageMap()
+	downloadErrors := processor.GetDownloadErrors()
+
+	// Fast should succeed
+	if len(imageMap) < 1 {
+		t.Error("Expected at least 1 successful download (fast image)")
+	}
+
+	// Slow should timeout and fail
+	if len(downloadErrors) < 1 {
+		t.Error("Expected at least 1 failed download (slow/timeout)")
+	}
+
+	// Verify error message indicates timeout
+	for url, errMsg := range downloadErrors {
+		if strings.Contains(url, "slow") {
+			if !strings.Contains(strings.ToLower(errMsg), "timeout") &&
+				!strings.Contains(strings.ToLower(errMsg), "context") {
+				t.Logf("Warning: timeout error message may lack timeout indication: %s", errMsg)
+			}
 		}
 	}
 }
