@@ -540,3 +540,361 @@ Some text
 		})
 	}
 }
+
+// ============================================================================
+// T024: Transient Error Classification Unit Tests
+// ============================================================================
+
+func TestIsTransientError(t *testing.T) {
+	tests := []struct {
+		name        string
+		err         error
+		statusCode  int
+		isTransient bool
+		testDesc    string
+	}{
+		// Transient errors - should retry
+		{
+			name:        "timeout_error",
+			err:         timeoutError{},
+			statusCode:  0,
+			isTransient: true,
+			testDesc:    "Network timeouts are transient",
+		},
+		{
+			name:        "http_408_request_timeout",
+			err:         nil,
+			statusCode:  408,
+			isTransient: true,
+			testDesc:    "HTTP 408 is transient",
+		},
+		{
+			name:        "http_429_rate_limit",
+			err:         nil,
+			statusCode:  429,
+			isTransient: true,
+			testDesc:    "HTTP 429 (rate limit) is transient",
+		},
+		{
+			name:        "http_503_service_unavailable",
+			err:         nil,
+			statusCode:  503,
+			isTransient: true,
+			testDesc:    "HTTP 503 (service unavailable) is transient",
+		},
+		{
+			name:        "http_504_gateway_timeout",
+			err:         nil,
+			statusCode:  504,
+			isTransient: true,
+			testDesc:    "HTTP 504 (gateway timeout) is transient",
+		},
+
+		// Permanent errors - should not retry
+		{
+			name:        "http_404_not_found",
+			err:         nil,
+			statusCode:  404,
+			isTransient: false,
+			testDesc:    "HTTP 404 is permanent",
+		},
+		{
+			name:        "http_403_forbidden",
+			err:         nil,
+			statusCode:  403,
+			isTransient: false,
+			testDesc:    "HTTP 403 is permanent",
+		},
+		{
+			name:        "http_401_unauthorized",
+			err:         nil,
+			statusCode:  401,
+			isTransient: false,
+			testDesc:    "HTTP 401 is permanent",
+		},
+		{
+			name:        "http_400_bad_request",
+			err:         nil,
+			statusCode:  400,
+			isTransient: false,
+			testDesc:    "HTTP 400 is permanent",
+		},
+		{
+			name:        "http_500_server_error",
+			err:         nil,
+			statusCode:  500,
+			isTransient: false,
+			testDesc:    "HTTP 500 is permanent (not in transient list)",
+		},
+		{
+			name:        "http_301_redirect",
+			err:         nil,
+			statusCode:  301,
+			isTransient: false,
+			testDesc:    "HTTP 301 is permanent",
+		},
+		{
+			name:        "no_error_success",
+			err:         nil,
+			statusCode:  200,
+			isTransient: false,
+			testDesc:    "HTTP 200 is not an error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			processor := converter.NewImageProcessor(tempDir)
+
+			result := processor.IsTransientError(tt.err, tt.statusCode)
+			if result != tt.isTransient {
+				t.Errorf("%s: got %v, want %v", tt.testDesc, result, tt.isTransient)
+			}
+		})
+	}
+}
+
+// timeoutError is a mock timeout error for testing
+type timeoutError struct{}
+
+func (e timeoutError) Error() string   { return "timeout" }
+func (e timeoutError) Timeout() bool   { return true }
+func (e timeoutError) Temporary() bool { return true }
+
+// ============================================================================
+// T025: Retry Backoff Calculation Unit Tests
+// ============================================================================
+
+func TestCalculateBackoff(t *testing.T) {
+	tests := []struct {
+		name         string
+		attempt      int
+		minExpected  float64
+		maxExpected  float64
+		testDesc     string
+	}{
+		{
+			name:         "attempt_0",
+			attempt:      0,
+			minExpected:  0.0,
+			maxExpected:  1.0,
+			testDesc:     "Attempt 0 should backoff 0-1 seconds (2^0)",
+		},
+		{
+			name:         "attempt_1",
+			attempt:      1,
+			minExpected:  0.0,
+			maxExpected:  2.0,
+			testDesc:     "Attempt 1 should backoff 0-2 seconds (2^1)",
+		},
+		{
+			name:         "attempt_2",
+			attempt:      2,
+			minExpected:  0.0,
+			maxExpected:  4.0,
+			testDesc:     "Attempt 2 should backoff 0-4 seconds (2^2)",
+		},
+		{
+			name:         "attempt_3",
+			attempt:      3,
+			minExpected:  0.0,
+			maxExpected:  8.0,
+			testDesc:     "Attempt 3 should backoff 0-8 seconds (2^3)",
+		},
+		{
+			name:         "attempt_4_capped",
+			attempt:      4,
+			minExpected:  0.0,
+			maxExpected:  10.0,
+			testDesc:     "Attempt 4+ should be capped at 10 seconds (2^4 = 16, capped)",
+		},
+		{
+			name:         "attempt_5_capped",
+			attempt:      5,
+			minExpected:  0.0,
+			maxExpected:  10.0,
+			testDesc:     "Attempt 5+ should be capped at 10 seconds",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			processor := converter.NewImageProcessor(tempDir)
+
+			// Test multiple times to check randomness
+			results := make([]float64, 10)
+			for i := 0; i < 10; i++ {
+				results[i] = processor.CalculateBackoff(tt.attempt)
+				if results[i] < tt.minExpected || results[i] > tt.maxExpected {
+					t.Errorf("%s: attempt %d iteration %d got %f, expected %f-%f",
+						tt.testDesc, tt.attempt, i, results[i], tt.minExpected, tt.maxExpected)
+				}
+			}
+
+			// Check for randomness (if max > 0, should have different values)
+			if tt.maxExpected > 0 {
+				hasVariation := false
+				for i := 1; i < len(results); i++ {
+					if results[i] != results[i-1] {
+						hasVariation = true
+						break
+					}
+				}
+				if !hasVariation {
+					t.Logf("Warning: %s produced same value every time (may be unlucky randomness)", tt.testDesc)
+				}
+			}
+		})
+	}
+}
+
+// ============================================================================
+// T026 & T027: Download Retry Tests
+// ============================================================================
+
+func TestDownloadWithRetryTransientFailure(t *testing.T) {
+	tempDir := t.TempDir()
+	processor := converter.NewImageProcessor(tempDir).WithMaxRetries(3)
+
+	mock := testutil.NewMockHTTPServer()
+	defer mock.Close()
+
+	// Register a custom handler that returns 503 on first request, then 200
+	attemptCount := 0
+	mock.RegisterWithHandler("/test.png", func(w http.ResponseWriter, r *http.Request) {
+		attemptCount++
+		if attemptCount == 1 {
+			// First attempt: service unavailable (transient)
+			http.Error(w, "Service Unavailable", http.StatusServiceUnavailable)
+		} else {
+			// Second attempt: success
+			w.Header().Set("Content-Type", "image/png")
+			w.WriteHeader(http.StatusOK)
+			pngData, _ := testutil.CreateTestImageData("png")
+			w.Write(pngData)
+		}
+	})
+
+	imageURL := mock.ImageURL("/test.png")
+
+	// Should succeed on retry
+	localPath, err := processor.DownloadWithRetry(imageURL)
+	if err != nil {
+		t.Fatalf("DownloadWithRetry failed: %v", err)
+	}
+
+	if localPath == "" {
+		t.Error("Expected non-empty local path")
+	}
+
+	if attemptCount != 2 {
+		t.Errorf("Expected 2 attempts (1 failure + 1 success), got %d", attemptCount)
+	}
+
+	// Verify file exists
+	if _, err := os.Stat(localPath); err != nil {
+		t.Errorf("Downloaded file should exist: %v", err)
+	}
+}
+
+func TestDownloadWithRetryPermanentFailure(t *testing.T) {
+	tempDir := t.TempDir()
+	processor := converter.NewImageProcessor(tempDir).WithMaxRetries(3)
+
+	mock := testutil.NewMockHTTPServer()
+	defer mock.Close()
+
+	// Register handler that always returns 404
+	attemptCount := 0
+	mock.RegisterWithHandler("/notfound.png", func(w http.ResponseWriter, r *http.Request) {
+		attemptCount++
+		http.Error(w, "Not Found", http.StatusNotFound)
+	})
+
+	imageURL := mock.ImageURL("/notfound.png")
+
+	// Should fail immediately without retries
+	localPath, err := processor.DownloadWithRetry(imageURL)
+	if err == nil {
+		t.Error("Expected error for 404 (permanent failure)")
+	}
+
+	if localPath != "" {
+		t.Errorf("Expected empty path for failed download, got: %s", localPath)
+	}
+
+	if attemptCount != 1 {
+		t.Errorf("Expected 1 attempt (no retries for 404), got %d", attemptCount)
+	}
+}
+
+// ============================================================================
+// T028: Error Message Formatting Unit Tests
+// ============================================================================
+
+func TestErrorMessageFormatting(t *testing.T) {
+	tempDir := t.TempDir()
+	processor := converter.NewImageProcessor(tempDir)
+
+	mock := testutil.NewMockHTTPServer()
+	defer mock.Close()
+
+	// Test various error types
+	testCases := []struct {
+		name          string
+		path          string
+		setupHandler  func(string, *testutil.MockHTTPServer)
+		expectedError bool
+	}{
+		{
+			name: "404_not_found",
+			path: "/notfound.png",
+			setupHandler: func(path string, mock *testutil.MockHTTPServer) {
+				mock.RegisterError(path, http.StatusNotFound, "Not Found")
+			},
+			expectedError: true,
+		},
+		{
+			name: "500_server_error",
+			path: "/error.png",
+			setupHandler: func(path string, mock *testutil.MockHTTPServer) {
+				mock.RegisterError(path, http.StatusInternalServerError, "Internal Server Error")
+			},
+			expectedError: true,
+		},
+		{
+			name: "403_forbidden",
+			path: "/forbidden.png",
+			setupHandler: func(path string, mock *testutil.MockHTTPServer) {
+				mock.RegisterError(path, http.StatusForbidden, "Forbidden")
+			},
+			expectedError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.setupHandler(tc.path, mock)
+
+			imageURL := mock.ImageURL(tc.path)
+			_, err := processor.DownloadImageOnce(imageURL)
+
+			if !tc.expectedError && err != nil {
+				t.Errorf("Expected no error, got: %v", err)
+			}
+			if tc.expectedError && err == nil {
+				t.Error("Expected error but got none")
+			}
+
+			// Check downloadErrors map is populated
+			downloadErrors := processor.GetDownloadErrors()
+			if tc.expectedError {
+				if _, exists := downloadErrors[imageURL]; !exists {
+					t.Error("Expected error in downloadErrors map")
+				}
+			}
+		})
+	}
+}

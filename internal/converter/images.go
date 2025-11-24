@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -104,6 +105,11 @@ func isTransientError(err error, statusCode int) bool {
 
 	// Check for transient HTTP status codes
 	return statusCode == 408 || statusCode == 429 || statusCode == 503 || statusCode == 504
+}
+
+// IsTransientError is the public version for testing.
+func (ip *ImageProcessor) IsTransientError(err error, statusCode int) bool {
+	return isTransientError(err, statusCode)
 }
 
 // validateHTTPRequest validates an HTTP request and response.
@@ -305,6 +311,11 @@ func (ip *ImageProcessor) calculateBackoff(attempt int) float64 {
 	return jitteredWait
 }
 
+// CalculateBackoff is the public version for testing.
+func (ip *ImageProcessor) CalculateBackoff(attempt int) float64 {
+	return ip.calculateBackoff(attempt)
+}
+
 // ============================================================================
 // PLACEHOLDER FUNCTIONS (implemented in later phases)
 // ============================================================================
@@ -399,19 +410,31 @@ func (ip *ImageProcessor) DownloadImageOnce(imageURL string) (string, error) {
 	// Create HTTP request
 	req, err := http.NewRequestWithContext(ctx, "GET", imageURL, nil)
 	if err != nil {
+		errMsg := fmt.Sprintf("failed to create request: %v", err)
+		ip.mu.Lock()
+		ip.downloadErrors[imageURL] = errMsg
+		ip.mu.Unlock()
 		return "", fmt.Errorf("failed to create request for %s: %w", imageURL, err)
 	}
 
 	// Execute request
 	resp, err := ip.httpClient.Do(req)
 	if err != nil {
+		errMsg := fmt.Sprintf("failed to download: %v", err)
+		ip.mu.Lock()
+		ip.downloadErrors[imageURL] = errMsg
+		ip.mu.Unlock()
 		return "", fmt.Errorf("failed to download %s: %w", imageURL, err)
 	}
 	defer resp.Body.Close()
 
 	// Validate response
 	if err := validateHTTPRequest(resp); err != nil {
-		return "", fmt.Errorf("invalid HTTP response from %s: %w", imageURL, err)
+		errMsg := fmt.Sprintf("invalid HTTP response from %s: %v", imageURL, err)
+		ip.mu.Lock()
+		ip.downloadErrors[imageURL] = errMsg
+		ip.mu.Unlock()
+		return "", fmt.Errorf(errMsg)
 	}
 
 	// Validate size
@@ -423,6 +446,10 @@ func (ip *ImageProcessor) DownloadImageOnce(imageURL string) (string, error) {
 	}
 	if contentLength > 0 {
 		if err := ip.ValidateImageSize(contentLength); err != nil {
+			errMsg := fmt.Sprintf("image size validation failed: %v", err)
+			ip.mu.Lock()
+			ip.downloadErrors[imageURL] = errMsg
+			ip.mu.Unlock()
 			return "", fmt.Errorf("image size validation failed for %s: %w", imageURL, err)
 		}
 	}
@@ -431,6 +458,10 @@ func (ip *ImageProcessor) DownloadImageOnce(imageURL string) (string, error) {
 	fileName := generateFileName(imageURL, resp.Header.Get("Content-Type"))
 	tempFile, err := os.CreateTemp(ip.tempDir, fileName)
 	if err != nil {
+		errMsg := fmt.Sprintf("failed to create temp file: %v", err)
+		ip.mu.Lock()
+		ip.downloadErrors[imageURL] = errMsg
+		ip.mu.Unlock()
 		return "", fmt.Errorf("failed to create temp file for %s: %w", imageURL, err)
 	}
 	defer tempFile.Close()
@@ -440,6 +471,10 @@ func (ip *ImageProcessor) DownloadImageOnce(imageURL string) (string, error) {
 	if err != nil {
 		// Clean up failed download
 		os.Remove(tempFile.Name())
+		errMsg := fmt.Sprintf("failed to write image: %v", err)
+		ip.mu.Lock()
+		ip.downloadErrors[imageURL] = errMsg
+		ip.mu.Unlock()
 		return "", fmt.Errorf("failed to write image from %s: %w", imageURL, err)
 	}
 
@@ -447,6 +482,10 @@ func (ip *ImageProcessor) DownloadImageOnce(imageURL string) (string, error) {
 	if contentLength == 0 {
 		if err := ip.ValidateImageSize(writtenBytes); err != nil {
 			os.Remove(tempFile.Name())
+			errMsg := fmt.Sprintf("image too large: %v", err)
+			ip.mu.Lock()
+			ip.downloadErrors[imageURL] = errMsg
+			ip.mu.Unlock()
 			return "", fmt.Errorf("image too large from %s: %w", imageURL, err)
 		}
 	}
@@ -463,9 +502,53 @@ func (ip *ImageProcessor) DownloadImageOnce(imageURL string) (string, error) {
 }
 
 // downloadWithRetry downloads an image with retry logic.
-// PLACEHOLDER: Full implementation in Phase 4
-func (ip *ImageProcessor) downloadWithRetry(imageURL string) error {
-	return fmt.Errorf("not implemented in Phase 2 (foundation)")
+// Retries on transient errors (timeouts, 5xx, rate limits).
+// Fails immediately on permanent errors (4xx except 408).
+func (ip *ImageProcessor) downloadWithRetry(imageURL string) (string, error) {
+	var lastErr error
+
+	for attempt := 0; attempt <= ip.maxRetries; attempt++ {
+		// Try to download
+		localPath, err := ip.DownloadImageOnce(imageURL)
+		if err == nil {
+			return localPath, nil
+		}
+
+		// Check if error is transient
+		// Extract status code from error message if possible
+		statusCode := 0
+		if errMsg := err.Error(); strings.Contains(errMsg, "HTTP") {
+			// Try to extract status code from error message
+			parts := strings.Fields(errMsg)
+			for i, part := range parts {
+				if part == "HTTP" && i+1 < len(parts) {
+					// Next field should be status code
+					if code, parseErr := strconv.Atoi(parts[i+1]); parseErr == nil {
+						statusCode = code
+					}
+				}
+			}
+		}
+
+		lastErr = err
+		isTransient := isTransientError(err, statusCode)
+
+		// If permanent error or last attempt, return error
+		if !isTransient || attempt >= ip.maxRetries {
+			return "", err
+		}
+
+		// Calculate backoff and wait
+		backoffSeconds := ip.calculateBackoff(attempt)
+		time.Sleep(time.Duration(backoffSeconds*1000) * time.Millisecond)
+	}
+
+	return "", lastErr
+}
+
+// DownloadWithRetry is the public version for testing.
+func (ip *ImageProcessor) DownloadWithRetry(imageURL string) (string, error) {
+	return ip.downloadWithRetry(imageURL)
 }
 
 // RewriteMarkdownImageURLs rewrites markdown image references to use local paths.
