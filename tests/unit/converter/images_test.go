@@ -2,8 +2,8 @@ package converter_test
 
 import (
 	"net/http"
-	"path/filepath"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -669,53 +669,53 @@ func (e timeoutError) Temporary() bool { return true }
 
 func TestCalculateBackoff(t *testing.T) {
 	tests := []struct {
-		name         string
-		attempt      int
-		minExpected  float64
-		maxExpected  float64
-		testDesc     string
+		name        string
+		attempt     int
+		minExpected float64
+		maxExpected float64
+		testDesc    string
 	}{
 		{
-			name:         "attempt_0",
-			attempt:      0,
-			minExpected:  0.0,
-			maxExpected:  1.0,
-			testDesc:     "Attempt 0 should backoff 0-1 seconds (2^0)",
+			name:        "attempt_0",
+			attempt:     0,
+			minExpected: 0.0,
+			maxExpected: 1.0,
+			testDesc:    "Attempt 0 should backoff 0-1 seconds (2^0)",
 		},
 		{
-			name:         "attempt_1",
-			attempt:      1,
-			minExpected:  0.0,
-			maxExpected:  2.0,
-			testDesc:     "Attempt 1 should backoff 0-2 seconds (2^1)",
+			name:        "attempt_1",
+			attempt:     1,
+			minExpected: 0.0,
+			maxExpected: 2.0,
+			testDesc:    "Attempt 1 should backoff 0-2 seconds (2^1)",
 		},
 		{
-			name:         "attempt_2",
-			attempt:      2,
-			minExpected:  0.0,
-			maxExpected:  4.0,
-			testDesc:     "Attempt 2 should backoff 0-4 seconds (2^2)",
+			name:        "attempt_2",
+			attempt:     2,
+			minExpected: 0.0,
+			maxExpected: 4.0,
+			testDesc:    "Attempt 2 should backoff 0-4 seconds (2^2)",
 		},
 		{
-			name:         "attempt_3",
-			attempt:      3,
-			minExpected:  0.0,
-			maxExpected:  8.0,
-			testDesc:     "Attempt 3 should backoff 0-8 seconds (2^3)",
+			name:        "attempt_3",
+			attempt:     3,
+			minExpected: 0.0,
+			maxExpected: 8.0,
+			testDesc:    "Attempt 3 should backoff 0-8 seconds (2^3)",
 		},
 		{
-			name:         "attempt_4_capped",
-			attempt:      4,
-			minExpected:  0.0,
-			maxExpected:  10.0,
-			testDesc:     "Attempt 4+ should be capped at 10 seconds (2^4 = 16, capped)",
+			name:        "attempt_4_capped",
+			attempt:     4,
+			minExpected: 0.0,
+			maxExpected: 10.0,
+			testDesc:    "Attempt 4+ should be capped at 10 seconds (2^4 = 16, capped)",
 		},
 		{
-			name:         "attempt_5_capped",
-			attempt:      5,
-			minExpected:  0.0,
-			maxExpected:  10.0,
-			testDesc:     "Attempt 5+ should be capped at 10 seconds",
+			name:        "attempt_5_capped",
+			attempt:     5,
+			minExpected: 0.0,
+			maxExpected: 10.0,
+			testDesc:    "Attempt 5+ should be capped at 10 seconds",
 		},
 	}
 
@@ -973,30 +973,29 @@ func TestCleanupWithMissingFiles(t *testing.T) {
 // ============================================================================
 
 func TestDiskSpaceTracking(t *testing.T) {
-
 	tests := []struct {
 		name            string
-		downloads       []int64 // sizes in bytes
-		shouldAllSucceed bool
+		downloads       []int64 // sizes in bytes (each <= 100MB, total <= 500MB)
+		expectedSuccess int
 		testDesc        string
 	}{
 		{
 			name:            "within_limit",
-			downloads:       []int64{50 * 1024 * 1024, 150 * 1024 * 1024, 200 * 1024 * 1024},
-			shouldAllSucceed: true,
-			testDesc:        "Downloads within 500MB limit should all succeed",
+			downloads:       []int64{50 * 1024 * 1024, 50 * 1024 * 1024, 50 * 1024 * 1024},
+			expectedSuccess: 3,
+			testDesc:        "Multiple 50MB downloads within 500MB session limit should succeed",
 		},
 		{
-			name:            "exceed_limit",
-			downloads:       []int64{50 * 1024 * 1024, 150 * 1024 * 1024, 200 * 1024 * 1024, 150 * 1024 * 1024},
-			shouldAllSucceed: false,
-			testDesc:        "Fourth download should fail (exceeds 500MB limit)",
+			name:            "exceed_session_limit",
+			downloads:       []int64{100 * 1024 * 1024, 100 * 1024 * 1024, 100 * 1024 * 1024, 100 * 1024 * 1024, 100 * 1024 * 1024, 50 * 1024 * 1024},
+			expectedSuccess: 5,
+			testDesc:        "Sixth download should fail when session total exceeds 500MB",
 		},
 		{
-			name:            "at_limit",
-			downloads:       []int64{250 * 1024 * 1024, 250 * 1024 * 1024},
-			shouldAllSucceed: true,
-			testDesc:        "Downloads totaling exactly 500MB should succeed",
+			name:            "at_session_limit",
+			downloads:       []int64{100 * 1024 * 1024, 100 * 1024 * 1024, 100 * 1024 * 1024, 100 * 1024 * 1024, 100 * 1024 * 1024},
+			expectedSuccess: 5,
+			testDesc:        "Downloads totaling exactly 500MB (5x100MB) should succeed",
 		},
 	}
 
@@ -1015,16 +1014,9 @@ func TestDiskSpaceTracking(t *testing.T) {
 				}
 			}
 
-			if tt.shouldAllSucceed {
-				if successCount != len(tt.downloads) {
-					t.Errorf("%s: expected all %d downloads to succeed, %d succeeded",
-						tt.testDesc, len(tt.downloads), successCount)
-				}
-			} else {
-				if successCount == len(tt.downloads) {
-					t.Errorf("%s: expected some downloads to fail, all succeeded",
-						tt.testDesc)
-				}
+			if successCount != tt.expectedSuccess {
+				t.Errorf("%s: expected %d downloads to succeed, %d succeeded",
+					tt.testDesc, tt.expectedSuccess, successCount)
 			}
 		})
 	}
