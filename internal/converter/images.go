@@ -272,6 +272,40 @@ func (ip *ImageProcessor) GetDownloadErrors() map[string]string {
 	return result
 }
 
+// GetDownloadStats returns statistics about downloads.
+// Returns (successful count, failed count, total attempted).
+func (ip *ImageProcessor) GetDownloadStats() (successful, failed, total int) {
+	ip.mu.Lock()
+	defer ip.mu.Unlock()
+
+	successful = len(ip.imageMap)
+	failed = len(ip.downloadErrors)
+	total = successful + failed
+	return
+}
+
+// GetErrorSummary returns a formatted error summary for user output.
+// Format: "[WARN] Failed to download N images:\n  - URL1: reason1\n  - URL2: reason2"
+func (ip *ImageProcessor) GetErrorSummary() string {
+	errors := ip.GetDownloadErrors()
+	if len(errors) == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("[WARN] Failed to download %d image(s):\n", len(errors)))
+	for url, errMsg := range errors {
+		// Extract just the relevant part of the error message
+		reason := errMsg
+		if strings.Contains(errMsg, ":") {
+			parts := strings.Split(errMsg, ":")
+			reason = strings.TrimSpace(parts[len(parts)-1])
+		}
+		sb.WriteString(fmt.Sprintf("  - %s\n    Reason: %s\n", url, reason))
+	}
+	return sb.String()
+}
+
 // Cleanup removes all temporary image files created by this processor.
 // Uses best-effort approach: logs warnings but doesn't block on errors.
 func (ip *ImageProcessor) Cleanup() error {
@@ -322,9 +356,10 @@ func (ip *ImageProcessor) CalculateBackoff(attempt int) float64 {
 
 // ProcessMarkdown processes markdown content to download remote images and replace URLs.
 // Returns the processed markdown content with local image paths.
-// Downloads all remote images concurrently (up to maxConcurrentDownloads),
+// Downloads all remote images concurrently (up to maxConcurrentDownloads) with retry logic,
 // then rewrites the markdown to use local paths.
 // Note: Images that fail to download are left with original URLs.
+// Errors are collected but don't prevent conversion (graceful degradation).
 func (ip *ImageProcessor) ProcessMarkdown(content string) (string, error) {
 	// Create temp directory if it doesn't exist
 	if err := os.MkdirAll(ip.tempDir, 0o755); err != nil {
@@ -339,10 +374,10 @@ func (ip *ImageProcessor) ProcessMarkdown(content string) (string, error) {
 		return content, nil
 	}
 
-	// Download images concurrently with semaphore pattern
+	// Download images concurrently with semaphore pattern and retry logic
 	downloadErrors := ip.downloadImagesWithSemaphore(imageURLs)
 
-	// Store download errors for debugging
+	// Store download errors for access and reporting
 	ip.mu.Lock()
 	for url, err := range downloadErrors {
 		ip.downloadErrors[url] = err.Error()
@@ -353,10 +388,13 @@ func (ip *ImageProcessor) ProcessMarkdown(content string) (string, error) {
 	// Images that failed to download will keep original URLs
 	processedContent := ip.RewriteMarkdownImageURLs(content)
 
+	// Return processed content even if some downloads failed
+	// Errors are collected in downloadErrors for reporting
 	return processedContent, nil
 }
 
 // downloadImagesWithSemaphore downloads multiple images concurrently using a semaphore pattern.
+// Uses retry logic for transient errors.
 // Returns a map of URLs that failed to download with their error messages.
 func (ip *ImageProcessor) downloadImagesWithSemaphore(urls []string) map[string]error {
 	// Create a semaphore to limit concurrent downloads
@@ -377,8 +415,8 @@ func (ip *ImageProcessor) downloadImagesWithSemaphore(urls []string) map[string]
 			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
 
-			// Attempt download
-			_, err := ip.DownloadImageOnce(imageURL)
+			// Attempt download with retry logic
+			_, err := ip.downloadWithRetry(imageURL)
 			if err != nil {
 				errorsMu.Lock()
 				downloadErrors[imageURL] = err
