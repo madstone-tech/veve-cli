@@ -1,0 +1,542 @@
+package converter_test
+
+import (
+	"net/http"
+	"os"
+	"testing"
+	"time"
+
+	"github.com/madstone-tech/veve-cli/internal/converter"
+	"github.com/madstone-tech/veve-cli/tests/testutil"
+)
+
+// ============================================================================
+// T011: Image Detection Unit Tests
+// ============================================================================
+
+func TestDetectRemoteImages(t *testing.T) {
+	tests := []struct {
+		name            string
+		content         string
+		expectedURLs    []string
+		expectedCount   int
+		testDescription string
+	}{
+		{
+			name: "single_remote_image",
+			content: `# Test
+![alt text](https://example.com/image.png)`,
+			expectedURLs:    []string{"https://example.com/image.png"},
+			expectedCount:   1,
+			testDescription: "Should detect a single remote image",
+		},
+		{
+			name: "multiple_remote_images",
+			content: `# Test
+![first](https://example.com/first.png)
+Some text
+![second](https://example.com/second.jpg)`,
+			expectedURLs:    []string{"https://example.com/first.png", "https://example.com/second.jpg"},
+			expectedCount:   2,
+			testDescription: "Should detect multiple remote images",
+		},
+		{
+			name: "mixed_local_and_remote",
+			content: `# Test
+![local](/images/local.png)
+![remote](https://example.com/remote.png)
+![relative](./images/relative.png)`,
+			expectedURLs:    []string{"https://example.com/remote.png"},
+			expectedCount:   1,
+			testDescription: "Should detect only remote images, ignoring local paths",
+		},
+		{
+			name: "http_and_https",
+			content: `# Test
+![http](http://example.com/image.png)
+![https](https://example.com/image.jpg)`,
+			expectedURLs:    []string{"http://example.com/image.png", "https://example.com/image.jpg"},
+			expectedCount:   2,
+			testDescription: "Should detect both HTTP and HTTPS images",
+		},
+		{
+			name: "duplicate_urls",
+			content: `# Test
+![first](https://example.com/image.png)
+![second](https://example.com/image.png)
+![third](https://example.com/image.png)`,
+			expectedURLs:    []string{"https://example.com/image.png"},
+			expectedCount:   1,
+			testDescription: "Should deduplicate repeated URLs",
+		},
+		{
+			name: "no_remote_images",
+			content: `# Test
+No images here!
+![local](/images/test.png)
+![relative](./test.jpg)`,
+			expectedURLs:    []string{},
+			expectedCount:   0,
+			testDescription: "Should return empty list when no remote images",
+		},
+		{
+			name: "complex_markdown",
+			content: `# Title
+Some paragraph with ![inline](https://example.com/inline.png) image.
+
+Another paragraph with [link](https://example.com).
+
+![standalone](https://example.com/standalone.jpg)
+
+And ![another](https://cdn.example.com/image.gif) one.`,
+			expectedURLs:    []string{"https://example.com/inline.png", "https://example.com/standalone.jpg", "https://cdn.example.com/image.gif"},
+			expectedCount:   3,
+			testDescription: "Should handle complex markdown with mixed content",
+		},
+		{
+			name:            "empty_content",
+			content:         "",
+			expectedURLs:    []string{},
+			expectedCount:   0,
+			testDescription: "Should handle empty content",
+		},
+		{
+			name:            "image_with_url_params",
+			content:         `![test](https://example.com/image.png?width=800&height=600)`,
+			expectedURLs:    []string{"https://example.com/image.png?width=800&height=600"},
+			expectedCount:   1,
+			testDescription: "Should detect images with URL parameters",
+		},
+		{
+			name:            "image_with_spaces_in_alt_text",
+			content:         `![This is a long alt text with spaces](https://example.com/image.png)`,
+			expectedURLs:    []string{"https://example.com/image.png"},
+			expectedCount:   1,
+			testDescription: "Should detect images with spaces in alt text",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			processor := converter.NewImageProcessor(tempDir)
+
+			urls := processor.DetectRemoteImages(tt.content)
+
+			if len(urls) != tt.expectedCount {
+				t.Errorf("%s: got %d URLs, want %d", tt.testDescription, len(urls), tt.expectedCount)
+			}
+
+			for i, expectedURL := range tt.expectedURLs {
+				if i >= len(urls) {
+					t.Errorf("%s: missing URL at index %d: %s", tt.testDescription, i, expectedURL)
+					continue
+				}
+				if urls[i] != expectedURL {
+					t.Errorf("%s: URL mismatch at index %d. Got %s, want %s", tt.testDescription, i, urls[i], expectedURL)
+				}
+			}
+		})
+	}
+}
+
+// ============================================================================
+// T012: URL Validation Unit Tests
+// ============================================================================
+
+func TestIsRemoteURL(t *testing.T) {
+	tests := []struct {
+		url      string
+		expected bool
+		testName string
+	}{
+		{url: "https://example.com/image.png", expected: true, testName: "HTTPS URL"},
+		{url: "http://example.com/image.png", expected: true, testName: "HTTP URL"},
+		{url: "/local/path/image.png", expected: false, testName: "absolute local path"},
+		{url: "./relative/image.png", expected: false, testName: "relative path"},
+		{url: "image.png", expected: false, testName: "filename only"},
+		{url: "ftp://example.com/image.png", expected: false, testName: "FTP protocol"},
+		{url: "", expected: false, testName: "empty string"},
+		{url: "HTTPS://EXAMPLE.COM/IMAGE.PNG", expected: true, testName: "uppercase HTTPS"},
+		{url: "HTTP://EXAMPLE.COM/IMAGE.PNG", expected: true, testName: "uppercase HTTP"},
+		{url: "https://", expected: true, testName: "HTTPS with no domain"},
+		{url: "http://", expected: true, testName: "HTTP with no domain"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.testName, func(t *testing.T) {
+			tempDir := t.TempDir()
+			processor := converter.NewImageProcessor(tempDir)
+
+			result := processor.IsRemoteURL(tt.url)
+			if result != tt.expected {
+				t.Errorf("IsRemoteURL(%q) = %v, want %v", tt.url, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestIsImageContentType(t *testing.T) {
+	tests := []struct {
+		contentType string
+		expected    bool
+		testName    string
+	}{
+		{contentType: "image/png", expected: true, testName: "PNG image"},
+		{contentType: "image/jpeg", expected: true, testName: "JPEG image"},
+		{contentType: "image/gif", expected: true, testName: "GIF image"},
+		{contentType: "image/webp", expected: true, testName: "WEBP image"},
+		{contentType: "image/svg+xml", expected: true, testName: "SVG image"},
+		{contentType: "image/bmp", expected: true, testName: "BMP image"},
+		{contentType: "image/tiff", expected: true, testName: "TIFF image"},
+		{contentType: "image/x-icon", expected: true, testName: "ICO image"},
+		{contentType: "image/png; charset=utf-8", expected: true, testName: "PNG with charset"},
+		{contentType: "text/html", expected: false, testName: "HTML content"},
+		{contentType: "text/plain", expected: false, testName: "plain text"},
+		{contentType: "application/json", expected: false, testName: "JSON"},
+		{contentType: "application/pdf", expected: false, testName: "PDF"},
+		{contentType: "", expected: false, testName: "empty content type"},
+		{contentType: "IMAGE/PNG", expected: true, testName: "uppercase image type"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.testName, func(t *testing.T) {
+			tempDir := t.TempDir()
+			processor := converter.NewImageProcessor(tempDir)
+
+			result := processor.IsImageContentType(tt.contentType)
+			if result != tt.expected {
+				t.Errorf("IsImageContentType(%q) = %v, want %v", tt.contentType, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGetExtensionFromContentType(t *testing.T) {
+	tests := []struct {
+		contentType string
+		expected    string
+		testName    string
+	}{
+		{contentType: "image/jpeg", expected: ".jpg", testName: "JPEG"},
+		{contentType: "image/jpg", expected: ".jpg", testName: "JPG"},
+		{contentType: "image/png", expected: ".png", testName: "PNG"},
+		{contentType: "image/gif", expected: ".gif", testName: "GIF"},
+		{contentType: "image/webp", expected: ".webp", testName: "WEBP"},
+		{contentType: "image/svg+xml", expected: ".svg", testName: "SVG"},
+		{contentType: "image/bmp", expected: ".bmp", testName: "BMP"},
+		{contentType: "image/tiff", expected: ".tiff", testName: "TIFF"},
+		{contentType: "image/png; charset=utf-8", expected: ".png", testName: "PNG with charset"},
+		{contentType: "image/unknown", expected: ".img", testName: "unknown type"},
+		{contentType: "", expected: ".img", testName: "empty type"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.testName, func(t *testing.T) {
+			tempDir := t.TempDir()
+			processor := converter.NewImageProcessor(tempDir)
+
+			result := processor.GetExtensionFromContentType(tt.contentType)
+			if result != tt.expected {
+				t.Errorf("GetExtensionFromContentType(%q) = %q, want %q", tt.contentType, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestValidateImageSize(t *testing.T) {
+	tests := []struct {
+		name       string
+		setupFunc  func(*converter.ImageProcessor) // Optional setup
+		imageSize  int64
+		shouldFail bool
+		testDesc   string
+	}{
+		{
+			name:       "small_image",
+			imageSize:  1024 * 1024, // 1MB
+			shouldFail: false,
+			testDesc:   "Should allow images under 100MB",
+		},
+		{
+			name:       "max_image_size",
+			imageSize:  100 * 1024 * 1024, // 100MB (exactly at limit)
+			shouldFail: false,
+			testDesc:   "Should allow images at exactly 100MB limit",
+		},
+		{
+			name:       "exceeds_image_limit",
+			imageSize:  101 * 1024 * 1024, // 101MB
+			shouldFail: true,
+			testDesc:   "Should reject images exceeding 100MB",
+		},
+		{
+			name: "session_limit_multiple_images",
+			setupFunc: func(ip *converter.ImageProcessor) {
+				// Simulate prior downloads
+				ip.RecordDownload(400 * 1024 * 1024)
+			},
+			imageSize:  150 * 1024 * 1024, // Would exceed 500MB session limit
+			shouldFail: true,
+			testDesc:   "Should reject when session limit exceeded",
+		},
+		{
+			name: "session_limit_near_boundary",
+			setupFunc: func(ip *converter.ImageProcessor) {
+				ip.RecordDownload(400 * 1024 * 1024)
+			},
+			imageSize:  100 * 1024 * 1024,
+			shouldFail: false,
+			testDesc:   "Should allow if session limit not exceeded",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			processor := converter.NewImageProcessor(tempDir)
+
+			if tt.setupFunc != nil {
+				tt.setupFunc(processor)
+			}
+
+			err := processor.ValidateImageSize(tt.imageSize)
+
+			if (err != nil) != tt.shouldFail {
+				t.Errorf("%s: got error %v, shouldFail %v", tt.testDesc, err, tt.shouldFail)
+			}
+		})
+	}
+}
+
+// ============================================================================
+// T013: Single Image Download Unit Tests
+// ============================================================================
+
+func TestDownloadImageOnce(t *testing.T) {
+	tests := []struct {
+		name        string
+		setupServer func(*testutil.MockHTTPServer) string
+		shouldFail  bool
+		testDesc    string
+	}{
+		{
+			name: "successful_png_download",
+			setupServer: func(mock *testutil.MockHTTPServer) string {
+				mock.RegisterImage("/test.png", "png")
+				return mock.ImageURL("/test.png")
+			},
+			shouldFail: false,
+			testDesc:   "Should successfully download PNG image",
+		},
+		{
+			name: "successful_jpeg_download",
+			setupServer: func(mock *testutil.MockHTTPServer) string {
+				mock.RegisterImage("/test.jpg", "jpeg")
+				return mock.ImageURL("/test.jpg")
+			},
+			shouldFail: false,
+			testDesc:   "Should successfully download JPEG image",
+		},
+		{
+			name: "successful_gif_download",
+			setupServer: func(mock *testutil.MockHTTPServer) string {
+				mock.RegisterImage("/test.gif", "gif")
+				return mock.ImageURL("/test.gif")
+			},
+			shouldFail: false,
+			testDesc:   "Should successfully download GIF image",
+		},
+		{
+			name: "404_not_found",
+			setupServer: func(mock *testutil.MockHTTPServer) string {
+				return mock.URL() + "/nonexistent.png"
+			},
+			shouldFail: true,
+			testDesc:   "Should fail on 404 Not Found",
+		},
+		{
+			name: "non_image_content_type",
+			setupServer: func(mock *testutil.MockHTTPServer) string {
+				path := "/notimage.txt"
+				mock.RegisterResponse(path, http.StatusOK, "text/plain", []byte("not an image"))
+				return mock.ImageURL(path)
+			},
+			shouldFail: true,
+			testDesc:   "Should fail on non-image content type",
+		},
+		{
+			name: "timeout_exceeded",
+			setupServer: func(mock *testutil.MockHTTPServer) string {
+				path := "/slow.png"
+				pngData, _ := testutil.CreateTestImageData("png")
+				mock.RegisterWithDelay(path, 5*time.Second, http.StatusOK, "image/png", pngData)
+				return mock.ImageURL(path)
+			},
+			shouldFail: true,
+			testDesc:   "Should fail on timeout",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			processor := converter.NewImageProcessor(tempDir).WithTimeoutSeconds(2)
+
+			mock := testutil.NewMockHTTPServer()
+			defer mock.Close()
+
+			imageURL := tt.setupServer(mock)
+
+			localPath, err := processor.DownloadImageOnce(imageURL)
+
+			if (err != nil) != tt.shouldFail {
+				t.Errorf("%s: got error %v, shouldFail %v", tt.testDesc, err, tt.shouldFail)
+				return
+			}
+
+			if !tt.shouldFail {
+				// Verify file exists
+				if _, err := os.Stat(localPath); err != nil {
+					t.Errorf("%s: downloaded file does not exist at %s: %v", tt.testDesc, localPath, err)
+				}
+
+				// Verify it's in the imageMap
+				imageMap := processor.GetImageMap()
+				if imageMap[imageURL] != localPath {
+					t.Errorf("%s: image not in map or path mismatch", tt.testDesc)
+				}
+			}
+		})
+	}
+}
+
+func TestDownloadImageOnceCaching(t *testing.T) {
+	tempDir := t.TempDir()
+	processor := converter.NewImageProcessor(tempDir)
+
+	mock := testutil.NewMockHTTPServer()
+	defer mock.Close()
+
+	mock.RegisterImage("/test.png", "png")
+	imageURL := mock.ImageURL("/test.png")
+
+	// First download
+	path1, err := processor.DownloadImageOnce(imageURL)
+	if err != nil {
+		t.Fatalf("First download failed: %v", err)
+	}
+
+	// Second download should return cached path
+	path2, err := processor.DownloadImageOnce(imageURL)
+	if err != nil {
+		t.Fatalf("Second download failed: %v", err)
+	}
+
+	if path1 != path2 {
+		t.Errorf("Caching failed: got different paths for same URL: %s vs %s", path1, path2)
+	}
+}
+
+// ============================================================================
+// T014: Markdown Rewriting Unit Tests
+// ============================================================================
+
+func TestRewriteMarkdownImageURLs(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  string
+		imageMap map[string]string
+		expected string
+		testDesc string
+	}{
+		{
+			name: "single_image_rewrite",
+			content: `# Test
+![alt](https://example.com/test.png)`,
+			imageMap: map[string]string{
+				"https://example.com/test.png": "/tmp/veve-image-abc123.png",
+			},
+			expected: `# Test
+![alt](/tmp/veve-image-abc123.png)`,
+			testDesc: "Should rewrite single remote image URL",
+		},
+		{
+			name: "multiple_images_rewrite",
+			content: `![first](https://example.com/first.png)
+Some text
+![second](https://example.com/second.jpg)`,
+			imageMap: map[string]string{
+				"https://example.com/first.png":  "/tmp/veve-image-aaa.png",
+				"https://example.com/second.jpg": "/tmp/veve-image-bbb.jpg",
+			},
+			expected: `![first](/tmp/veve-image-aaa.png)
+Some text
+![second](/tmp/veve-image-bbb.jpg)`,
+			testDesc: "Should rewrite multiple image URLs",
+		},
+		{
+			name: "mixed_rewrites",
+			content: `![remote](https://example.com/remote.png)
+![local](/local/path.png)`,
+			imageMap: map[string]string{
+				"https://example.com/remote.png": "/tmp/veve-image-111.png",
+			},
+			expected: `![remote](/tmp/veve-image-111.png)
+![local](/local/path.png)`,
+			testDesc: "Should rewrite remote but keep local paths",
+		},
+		{
+			name:     "no_images",
+			content:  `# Just text, no images`,
+			imageMap: map[string]string{},
+			expected: `# Just text, no images`,
+			testDesc: "Should handle content with no images",
+		},
+		{
+			name:     "image_not_in_map",
+			content:  `![notdownloaded](https://example.com/notdownloaded.png)`,
+			imageMap: map[string]string{},
+			expected: `![notdownloaded](https://example.com/notdownloaded.png)`,
+			testDesc: "Should leave URL unchanged if not in imageMap",
+		},
+		{
+			name:    "image_with_url_parameters",
+			content: `![test](https://example.com/image.png?width=800)`,
+			imageMap: map[string]string{
+				"https://example.com/image.png?width=800": "/tmp/veve-image-xyz.png",
+			},
+			expected: `![test](/tmp/veve-image-xyz.png)`,
+			testDesc: "Should rewrite URLs with query parameters",
+		},
+		{
+			name: "duplicate_images",
+			content: `![first](https://example.com/same.png)
+![second](https://example.com/same.png)`,
+			imageMap: map[string]string{
+				"https://example.com/same.png": "/tmp/veve-image-dup.png",
+			},
+			expected: `![first](/tmp/veve-image-dup.png)
+![second](/tmp/veve-image-dup.png)`,
+			testDesc: "Should rewrite duplicate images with same local path",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			processor := converter.NewImageProcessor(tempDir)
+
+			// Populate the imageMap
+			for url, localPath := range tt.imageMap {
+				processor.SetImageMap(url, localPath)
+			}
+
+			result := processor.RewriteMarkdownImageURLs(tt.content)
+
+			if result != tt.expected {
+				t.Errorf("%s:\nGot:\n%s\nWant:\n%s", tt.testDesc, result, tt.expected)
+			}
+		})
+	}
+}
