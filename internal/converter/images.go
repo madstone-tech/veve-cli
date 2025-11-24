@@ -311,15 +311,73 @@ func (ip *ImageProcessor) calculateBackoff(attempt int) float64 {
 
 // ProcessMarkdown processes markdown content to download remote images and replace URLs.
 // Returns the processed markdown content with local image paths.
-// PLACEHOLDER: Full implementation in Phase 3 with concurrent downloads
+// Downloads all remote images concurrently (up to maxConcurrentDownloads),
+// then rewrites the markdown to use local paths.
+// Note: Images that fail to download are left with original URLs.
 func (ip *ImageProcessor) ProcessMarkdown(content string) (string, error) {
 	// Create temp directory if it doesn't exist
 	if err := os.MkdirAll(ip.tempDir, 0o755); err != nil {
 		return "", fmt.Errorf("failed to create temp directory for images: %w", err)
 	}
 
-	// Phase 3 will add full concurrent download logic here
-	return content, nil
+	// Detect all remote image URLs
+	imageURLs := ip.DetectRemoteImages(content)
+
+	// If no remote images, return content as-is
+	if len(imageURLs) == 0 {
+		return content, nil
+	}
+
+	// Download images concurrently with semaphore pattern
+	downloadErrors := ip.downloadImagesWithSemaphore(imageURLs)
+
+	// Store download errors for debugging
+	ip.mu.Lock()
+	for url, err := range downloadErrors {
+		ip.downloadErrors[url] = err.Error()
+	}
+	ip.mu.Unlock()
+
+	// Rewrite markdown with downloaded image paths
+	// Images that failed to download will keep original URLs
+	processedContent := ip.RewriteMarkdownImageURLs(content)
+
+	return processedContent, nil
+}
+
+// downloadImagesWithSemaphore downloads multiple images concurrently using a semaphore pattern.
+// Returns a map of URLs that failed to download with their error messages.
+func (ip *ImageProcessor) downloadImagesWithSemaphore(urls []string) map[string]error {
+	// Create a semaphore to limit concurrent downloads
+	semaphore := make(chan struct{}, ip.maxConcurrentDownloads)
+
+	// WaitGroup for synchronization
+	var wg sync.WaitGroup
+	downloadErrors := make(map[string]error)
+	var errorsMu sync.Mutex
+
+	for _, url := range urls {
+		wg.Add(1)
+
+		go func(imageURL string) {
+			defer wg.Done()
+
+			// Acquire semaphore slot
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+
+			// Attempt download
+			_, err := ip.DownloadImageOnce(imageURL)
+			if err != nil {
+				errorsMu.Lock()
+				downloadErrors[imageURL] = err
+				errorsMu.Unlock()
+			}
+		}(url)
+	}
+
+	wg.Wait()
+	return downloadErrors
 }
 
 // DownloadImageOnce downloads a single image without retries.
