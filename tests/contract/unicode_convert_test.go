@@ -88,7 +88,7 @@ Math: ∑
 		}
 
 		// Run veve convert with --engine xelatex
-		cmd := exec.Command(vevePath, "convert", "--engine", "xelatex", inputFile, outputFile)
+		cmd := exec.Command(vevePath, "convert", "--engine", "xelatex", "-o", outputFile, inputFile)
 		output, err := cmd.CombinedOutput()
 
 		if err != nil {
