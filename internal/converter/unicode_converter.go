@@ -76,25 +76,67 @@ func ConvertWithUnicodeSupport(opts UnicodeConversionOptions) error {
 
 // selectEngineForConversion selects the appropriate PDF engine
 // Respects explicit engine selection; auto-detects if needed
+// Prefers emoji-capable engines (WeasyPrint/Prince) for emoji-heavy content
 func selectEngineForConversion(opts UnicodeConversionOptions) (*engines.PDFEngine, error) {
 	// If user explicitly specified engine, use it (FR-001.1)
 	if opts.PDFEngine != "" {
 		return engines.SelectEngineForConversion(opts.PDFEngine)
 	}
 
-	// Auto-detect if content has unicode and select appropriately
-	contentHasUnicode, err := detectUnicodeInFile(opts.InputFile)
+	// Read file content for intelligent engine selection
+	content, err := os.ReadFile(opts.InputFile)
 	if err != nil {
-		// If we can't detect, use default
+		// If we can't read, use default
 		return engines.GetDefaultEngine()
 	}
 
-	if contentHasUnicode {
-		// Content has unicode - use default unicode-capable engine
-		return engines.GetDefaultEngine()
+	// Analyze content to determine best engine
+	contentStr := string(content)
+	hasEmoji := engines.ContainsEmoji(contentStr)
+	hasCJK := engines.ContainsCJK(contentStr)
+	hasHighComplexity := hasEmoji || (hasCJK && len(contentStr) > 5000) // CJK with lots of text
+
+	// For high-complexity unicode (emoji, extensive CJK), prefer WeasyPrint or Prince
+	// These engines have better font support for emoji and complex scripts
+	if hasHighComplexity {
+		// Try to select an emoji-capable engine
+		if engine, err := selectEmojiCapableEngine(); err == nil {
+			return engine, nil
+		}
+		// Fall back to default if emoji-capable selection fails
 	}
 
-	// No unicode - could use any engine, but use default for consistency
+	// For regular unicode content, use default
+	return engines.GetDefaultEngine()
+}
+
+// selectEmojiCapableEngine attempts to select an engine with good emoji support
+// Prefers WeasyPrint and Prince over XeLaTeX for emoji rendering
+func selectEmojiCapableEngine() (*engines.PDFEngine, error) {
+	// Try to use selector to find best engine
+	selector, err := engines.NewEngineSelector()
+	if err != nil {
+		return nil, err
+	}
+
+	// Get all available engines and check for emoji-capable ones
+	availableEngines := selector.GetAvailableEngines()
+
+	// Prefer WeasyPrint (better emoji support)
+	for _, name := range availableEngines {
+		if name == "weasyprint" {
+			return engines.SelectEngineForConversion("weasyprint")
+		}
+	}
+
+	// Then try Prince
+	for _, name := range availableEngines {
+		if name == "prince" {
+			return engines.SelectEngineForConversion("prince")
+		}
+	}
+
+	// Fall back to default
 	return engines.GetDefaultEngine()
 }
 
