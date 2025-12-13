@@ -36,7 +36,7 @@ End test.
 		}
 
 		// Run veve convert with default settings
-		cmd := exec.Command(vevePath, "convert", inputFile, outputFile)
+		cmd := exec.Command(vevePath, "convert", "-o", outputFile, inputFile)
 		output, err := cmd.CombinedOutput()
 
 		// Should succeed (exit code 0)
@@ -129,7 +129,7 @@ func TestUnicodeConversion_AllCharacterTypes(t *testing.T) {
 			t.Fatalf("failed to create test file: %v", err)
 		}
 
-		cmd := exec.Command(vevePath, "convert", inputFile, outputFile)
+		cmd := exec.Command(vevePath, "convert", "-o", outputFile, inputFile)
 		_, err := cmd.CombinedOutput()
 
 		if err != nil {
@@ -156,7 +156,7 @@ func TestUnicodeConversion_AllCharacterTypes(t *testing.T) {
 			t.Fatalf("failed to create test file: %v", err)
 		}
 
-		cmd := exec.Command(vevePath, "convert", inputFile, outputFile)
+		cmd := exec.Command(vevePath, "convert", "-o", outputFile, inputFile)
 		_, err := cmd.CombinedOutput()
 
 		if err != nil {
@@ -177,7 +177,7 @@ func TestUnicodeConversion_AllCharacterTypes(t *testing.T) {
 			t.Fatalf("failed to create test file: %v", err)
 		}
 
-		cmd := exec.Command(vevePath, "convert", inputFile, outputFile)
+		cmd := exec.Command(vevePath, "convert", "-o", outputFile, inputFile)
 		_, err := cmd.CombinedOutput()
 
 		if err != nil {
@@ -188,20 +188,35 @@ func TestUnicodeConversion_AllCharacterTypes(t *testing.T) {
 
 // buildVeve builds or locates the veve binary for testing
 func buildVeve(t *testing.T) string {
-	// Try to find veve in PATH or build it
+	// Try multiple locations to find veve
+	locations := []string{
+		"veve",                              // Current directory
+		"./veve",                            // Relative to current
+		"../veve",                           // Parent directory
+		"../../veve",                        // Two levels up
+		filepath.Join(os.TempDir(), "veve"), // Temp directory
+	}
+
+	// First, try common locations from cwd
+	for _, loc := range locations {
+		if _, err := os.Stat(loc); err == nil {
+			abs, err := filepath.Abs(loc)
+			if err == nil {
+				return abs
+			}
+			return loc
+		}
+	}
+
+	// Try to find via executable path (for test binary location)
 	exePath, err := os.Executable()
-	if err != nil {
-		t.Logf("failed to get executable path: %v", err)
+	if err == nil {
+		repoRoot := filepath.Join(filepath.Dir(exePath), "..", "..")
+		vevePath := filepath.Join(repoRoot, "veve")
+		if _, err := os.Stat(vevePath); err == nil {
+			return vevePath
+		}
 	}
 
-	repoRoot := filepath.Join(filepath.Dir(exePath), "..", "..")
-	vevePath := filepath.Join(repoRoot, "veve")
-
-	// Try to build if not exists
-	if _, err := os.Stat(vevePath); os.IsNotExist(err) {
-		// Skip if can't build
-		return ""
-	}
-
-	return vevePath
+	return ""
 }
