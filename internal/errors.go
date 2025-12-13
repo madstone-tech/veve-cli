@@ -106,3 +106,63 @@ func ConfigLoadFailed(filePath string, err error) *VeveError {
 		err,
 	)
 }
+
+// PDFEngineNotFound creates an error for missing PDF engine.
+func PDFEngineNotFound(engineName string) *VeveError {
+	return NewVeveError(
+		"convert",
+		"select PDF engine",
+		fmt.Sprintf("engine '%s' not found in PATH", engineName),
+		"install a unicode-capable engine: xelatex, weasyprint, or prince",
+		nil,
+	)
+}
+
+// UnicodeNotSupported creates an error for unicode rendering failures.
+// Uses platform-specific installation instructions.
+func UnicodeNotSupported(engineName, platform string) *VeveError {
+	instructions := getPlatformInstallInstructions(engineName, platform)
+
+	return NewVeveError(
+		"convert",
+		"render unicode/emoji",
+		fmt.Sprintf("engine '%s' does not support unicode characters", engineName),
+		fmt.Sprintf("install xelatex or weasyprint; %s", instructions),
+		nil,
+	)
+}
+
+// NoUnicodeEngineAvailable creates an error when no unicode-capable engine is found.
+func NoUnicodeEngineAvailable() *VeveError {
+	return NewVeveError(
+		"convert",
+		"select PDF engine",
+		"no unicode-capable PDF engine found in PATH",
+		"install one of: xelatex, lualatex, weasyprint, or prince; see docs for instructions",
+		nil,
+	)
+}
+
+// getPlatformInstallInstructions returns platform-specific install instructions
+func getPlatformInstallInstructions(engineName, platform string) string {
+	instructions := map[string]map[string]string{
+		"xelatex": {
+			"darwin":  "On macOS: brew install mactex",
+			"linux":   "On Ubuntu/Debian: sudo apt-get install texlive-xetex",
+			"windows": "On Windows: Download MiKTeX from https://miktex.org/",
+		},
+		"weasyprint": {
+			"darwin":  "On macOS: brew install weasyprint",
+			"linux":   "On Ubuntu/Debian: sudo apt-get install weasyprint",
+			"windows": "On Windows: pip install weasyprint",
+		},
+	}
+
+	if insts, ok := instructions[engineName]; ok {
+		if inst, ok := insts[platform]; ok {
+			return inst
+		}
+	}
+
+	return "install xelatex or weasyprint"
+}

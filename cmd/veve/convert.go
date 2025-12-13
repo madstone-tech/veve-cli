@@ -23,7 +23,7 @@ var convertCmd = &cobra.Command{
 			return err
 		}
 
-		pdfEngine, err := cmd.Flags().GetString("pdf-engine")
+		pdfEngine, err := cmd.Flags().GetString("engine")
 		if err != nil {
 			return err
 		}
@@ -58,7 +58,7 @@ var convertCmd = &cobra.Command{
 func init() {
 	convertCmd.Flags().StringP("output", "o", "", "output PDF file path (default: input filename with .pdf extension)")
 	convertCmd.Flags().StringP("theme", "t", "default", "theme to use for PDF styling")
-	convertCmd.Flags().StringP("pdf-engine", "e", "pdflatex", "Pandoc PDF engine to use")
+	convertCmd.Flags().StringP("engine", "e", "xelatex", "PDF rendering engine to use (xelatex, lualatex, weasyprint, prince)")
 	convertCmd.Flags().BoolP("enable-remote-images", "r", true, "automatically download and embed remote images in PDF")
 	convertCmd.Flags().Int("remote-images-timeout", 10, "timeout in seconds for downloading each remote image")
 	convertCmd.Flags().Int("remote-images-max-retries", 3, "maximum number of retries for failed image downloads")
