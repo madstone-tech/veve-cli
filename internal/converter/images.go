@@ -537,7 +537,7 @@ func (ip *ImageProcessor) DownloadImageOnce(imageURL string) (string, error) {
 		ip.mu.Lock()
 		ip.downloadErrors[imageURL] = errMsg
 		ip.mu.Unlock()
-		return "", fmt.Errorf(errMsg)
+		return "", fmt.Errorf("%s", errMsg)
 	}
 
 	// Validate size
