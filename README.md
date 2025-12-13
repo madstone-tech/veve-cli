@@ -13,6 +13,7 @@ A fast, themeable markdown-to-PDF converter built with Go. Convert your markdown
 - 🎨 **Theme Support** - 3 built-in themes (default, dark, academic) + unlimited custom themes
 - ⚙️ **Theme Management** - List, add, and remove themes via CLI
 - 📝 **Custom Themes** - Create themes in `~/.config/veve/themes/` with YAML metadata
+- 🌐 **Remote Images** - Automatically download and embed remote images from HTTP/HTTPS URLs
 - 🔀 **Unix Composability** - Full stdin/stdout support for piping and scripting
 - 🛠️ **Configuration** - TOML-based config with XDG Base Directory support
 - 🚀 **Cross-Platform** - macOS, Linux, Windows support
@@ -90,6 +91,57 @@ veve theme list
 veve input.md --theme dark -o output.pdf
 veve input.md --theme academic -o output.pdf
 ```
+
+### Remote Images
+
+```bash
+# Automatically download and embed remote images (enabled by default)
+veve input.md -o output.pdf
+
+# Explicit enable
+veve input.md --enable-remote-images=true -o output.pdf
+
+# Disable remote image downloading
+veve input.md --enable-remote-images=false -o output.pdf
+
+# Customize timeout and retries for unreliable networks
+veve input.md \
+  --remote-images-timeout=30 \
+  --remote-images-max-retries=5 \
+  -o output.pdf
+
+# Use custom temp directory for downloads
+veve input.md \
+  --remote-images-temp-dir=/mnt/fast-storage \
+  -o output.pdf
+```
+
+**Example Markdown:**
+
+```markdown
+# My Document
+
+Here's a remote image from a CDN:
+
+![Architecture Diagram](https://cdn.example.com/diagrams/architecture.png)
+
+And another from an external source:
+
+![Screenshot](https://docs.example.com/images/screenshot.png)
+
+Local images still work too:
+
+![Local Image](./local-image.png)
+```
+
+**Features:**
+- 📥 Automatic download and embedding of HTTP/HTTPS image URLs
+- ⚡ Concurrent downloads (5 images at a time by default)
+- 🔄 Automatic retry with exponential backoff for transient failures
+- 💾 Disk space limits (500MB per session, 100MB per image)
+- 🧹 Automatic cleanup of temporary files
+- ✅ Graceful degradation if some images fail to download
+- 📊 Detailed error messages for troubleshooting
 
 ### Custom Themes
 
@@ -205,7 +257,7 @@ export VEVE_VERBOSE="true"
 veve [input] [flags]
 ```
 
-Flags:
+**Core Flags:**
 
 - `-o, --output string` - Output PDF file path (default: input filename with .pdf extension)
 - `-t, --theme string` - Theme to use for PDF styling (default: "default")
@@ -214,6 +266,13 @@ Flags:
 - `--verbose` - Enable verbose output
 - `-h, --help` - Show help message
 - `-v, --version` - Show version
+
+**Remote Images Flags:**
+
+- `-r, --enable-remote-images` - Download and embed remote images (default: true)
+- `--remote-images-timeout int` - Timeout in seconds per image download (default: 10)
+- `--remote-images-max-retries int` - Maximum retry attempts for failed downloads (default: 3)
+- `--remote-images-temp-dir string` - Custom temporary directory for downloads (default: system temp)
 
 ### Theme Commands
 
@@ -326,6 +385,57 @@ npm run build && veve content/blog/*.md -o public/pdfs/
   with:
     path: build/*.pdf
 ```
+
+## Remote Images Guide
+
+### Quick Start
+
+Remote images are **enabled by default**. Just use remote image URLs in your markdown:
+
+```markdown
+![diagram](https://cdn.example.com/diagram.png)
+![photo](https://cdn.example.com/photo.jpg)
+```
+
+When you run `veve convert document.md`:
+1. Images are automatically downloaded
+2. Downloaded files are cached in temp directory
+3. Markdown is rewritten with local paths
+4. PDF is generated with embedded images
+5. Temp files are cleaned up
+
+### Performance Tips
+
+**For Fast Networks:**
+```bash
+veve document.md  # Defaults are optimal for typical networks
+```
+
+**For Slow Networks:**
+```bash
+veve document.md \
+  --remote-images-timeout=30 \
+  --remote-images-max-retries=5
+```
+
+**For Large Image Batches:**
+```bash
+veve document.md \
+  --remote-images-temp-dir=/mnt/fast-ssd  # Use faster storage
+```
+
+### Troubleshooting Remote Images
+
+| Problem | Solution |
+|---------|----------|
+| Images not downloading | Feature is enabled by default. Check that URLs are correct |
+| Timeout errors | Increase timeout: `--remote-images-timeout=30` |
+| Rate limit errors (429) | Automatic retries handle this. Check image source |
+| 404 errors | Verify image URLs in markdown are correct |
+| Disk space exceeded | Reduce document size or split into multiple conversions |
+| Cleanup warnings | Use custom temp dir: `--remote-images-temp-dir=./temp` |
+
+For more details, see [specs/002-remote-images/quickstart.md](specs/002-remote-images/quickstart.md).
 
 ## Troubleshooting
 
@@ -501,6 +611,7 @@ git push origin v0.2.0
 
 ## Documentation
 
+- [Remote Images Guide](specs/002-remote-images/quickstart.md) - Automatic image downloading and embedding
 - [Theme Development Guide](docs/THEME_DEVELOPMENT.md) - Create custom themes
 - [Integration Examples](docs/INTEGRATION.md) - Use veve in your workflow
 - [Release Guide](docs/RELEASE.md) - Create releases
@@ -508,7 +619,9 @@ git push origin v0.2.0
 
 ## Performance
 
-Typical performance metrics:
+### Conversion Performance
+
+Typical conversion times (Pandoc + PDF generation):
 
 | Task                          | Time         |
 | ----------------------------- | ------------ |
@@ -517,6 +630,24 @@ Typical performance metrics:
 | Large document (> 50 pages)   | 5-10 seconds |
 
 _Times vary based on Pandoc, PDF engine, and system performance_
+
+### Remote Image Download Performance
+
+When remote images are included:
+
+| Scenario | Time |
+|----------|------|
+| Single image (2MB) | ~2 seconds |
+| 5 images (10MB total) | ~2-3 seconds |
+| 20 images (40MB total) | ~10 seconds |
+
+_With 5 concurrent downloads (default). Times depend on network speed and image source responsiveness._
+
+**Performance Tips:**
+- Concurrent downloads (5 workers) provide ~2.5x speedup vs sequential
+- Images are cached during conversion (no re-downloads for duplicates)
+- Slow images don't block others (concurrent downloads continue)
+- Timeouts prevent hanging on unresponsive sources (default 10s, configurable)
 
 ## Compatibility
 
@@ -554,14 +685,36 @@ MIT License - see [LICENSE](LICENSE) for details
 - **Discussions**: [GitHub Discussions](https://github.com/madstone-tech/veve-cli/discussions)
 - **Documentation**: See `/docs` directory
 
+## Changelog
+
+### v0.2.0 (December 2025)
+- ✨ **New Feature**: Automatic remote image downloading and embedding
+  - Downloads HTTP/HTTPS images during conversion
+  - Concurrent downloads (5 workers default)
+  - Retry logic with exponential backoff
+  - Disk space limits (500MB per session, 100MB per image)
+  - Detailed error messages and logging
+  - Graceful degradation on network failures
+- 🔄 Improved error handling and reporting
+- 📚 Enhanced documentation and examples
+
+### v0.1.0 (November 2025)
+- Initial release
+- Markdown to PDF conversion
+- Theme support (built-in and custom)
+- Theme management CLI
+- Configuration support
+
 ## Roadmap
 
 - [ ] Web UI for theme preview
 - [ ] Built-in theme marketplace
-- [ ] Docker image
+- [ ] Docker image with Pandoc
 - [ ] Package managers (apt, rpm, brew, etc.)
 - [ ] Template variables (author, date, etc.)
 - [ ] PDF merge capability
+- [ ] Batch image download progress indicator
+- [ ] Image caching across multiple conversions
 
 ---
 

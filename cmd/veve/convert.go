@@ -28,8 +28,30 @@ var convertCmd = &cobra.Command{
 			return err
 		}
 
+		enableRemoteImages, err := cmd.Flags().GetBool("enable-remote-images")
+		if err != nil {
+			return err
+		}
+
+		remoteImagesTimeout, err := cmd.Flags().GetInt("remote-images-timeout")
+		if err != nil {
+			return err
+		}
+
+		remoteImagesMaxRetries, err := cmd.Flags().GetInt("remote-images-max-retries")
+		if err != nil {
+			return err
+		}
+
+		remoteImagesTempDir, err := cmd.Flags().GetString("remote-images-temp-dir")
+		if err != nil {
+			return err
+		}
+
 		// Delegate to shared conversion function
-		return performConversion(inputFile, outputFile, theme, pdfEngine, quiet, verbose)
+		return performConversion(inputFile, outputFile, theme, pdfEngine, quiet, verbose,
+			enableRemoteImages, remoteImagesTimeout, remoteImagesMaxRetries,
+			remoteImagesTempDir)
 	},
 }
 
@@ -37,4 +59,8 @@ func init() {
 	convertCmd.Flags().StringP("output", "o", "", "output PDF file path (default: input filename with .pdf extension)")
 	convertCmd.Flags().StringP("theme", "t", "default", "theme to use for PDF styling")
 	convertCmd.Flags().StringP("pdf-engine", "e", "pdflatex", "Pandoc PDF engine to use")
+	convertCmd.Flags().BoolP("enable-remote-images", "r", true, "automatically download and embed remote images in PDF")
+	convertCmd.Flags().Int("remote-images-timeout", 10, "timeout in seconds for downloading each remote image")
+	convertCmd.Flags().Int("remote-images-max-retries", 3, "maximum number of retries for failed image downloads")
+	convertCmd.Flags().String("remote-images-temp-dir", "", "custom temporary directory for downloaded images (default: system temp dir)")
 }
