@@ -19,6 +19,7 @@ A fast, themeable markdown-to-PDF converter built with Go. Convert your markdown
 - 🚀 **Cross-Platform** - macOS, Linux, Windows support
 - 🔧 **Pandoc Flexibility** - Configurable PDF engines and Pandoc options
 - 📦 **Shell Completions** - bash, zsh, and fish autocompletion support
+- 🌍 **Unicode & Emoji Support** - Automatic PDF engine selection for unicode content including emoji, CJK characters, math symbols, and diacritics
 
 ## Installation
 
@@ -115,6 +116,77 @@ veve input.md \
   --remote-images-temp-dir=/mnt/fast-storage \
   -o output.pdf
 ```
+
+### Unicode & Emoji Support
+
+veve automatically detects and renders unicode content including emoji, CJK characters, mathematical symbols, and diacritics. The tool selects an appropriate PDF engine based on system availability.
+
+#### Supported Unicode Content
+
+- **Emoji**: 🎉 📄 ✅ 🚀 ❤️ (standard emoji sets and ZWJ sequences like 👨‍💻)
+- **CJK Characters**: 世界 日本 中国 (Chinese, Japanese, Korean)
+- **Mathematical Symbols**: ∑ ± ∫ ∈ ∪ ∩ (and others)
+- **Diacritics**: Café naïve Zürich (combining marks and accents)
+- **Special Characters**: © ® ™ € £ ¥ § ¶ † ‡
+
+#### Basic Unicode Conversion
+
+```bash
+# Automatic engine selection for unicode content
+veve unicode-document.md -o output.pdf
+
+# Content with emoji 🎉, CJK 世界, math ∑, diacritics é automatically rendered
+```
+
+#### Explicit Engine Selection
+
+```bash
+# Use specific unicode-capable engine
+veve document.md --engine xelatex -o output.pdf
+veve document.md --engine weasyprint -o output.pdf
+
+# Available engines: xelatex, lualatex, weasyprint, prince
+```
+
+#### PDF Engine Requirements
+
+veve requires a unicode-capable PDF engine. Engines are tested in this order:
+
+1. **xelatex** (recommended) - Fast, widely available, excellent unicode support
+2. **lualatex** - Similar capabilities to xelatex
+3. **weasyprint** - Python-based, good unicode support
+4. **prince** - Commercial option with premium support
+
+#### Installation Requirements
+
+**macOS:**
+```bash
+# Install mactex (includes xelatex)
+brew install mactex
+```
+
+**Ubuntu/Debian:**
+```bash
+# Option 1: xelatex
+sudo apt-get update
+sudo apt-get install texlive-xetex
+
+# Option 2: weasyprint
+sudo apt-get install weasyprint
+```
+
+**Fedora/RHEL:**
+```bash
+# Option 1: xelatex
+sudo dnf install texlive-xetex
+
+# Option 2: weasyprint
+sudo dnf install weasyprint
+```
+
+**Windows:**
+- Download [MiKTeX](https://miktex.org/) and select xelatex during installation
+- Or install weasyprint via pip: `pip install weasyprint`
 
 **Example Markdown:**
 
@@ -290,20 +362,73 @@ veve theme remove <name> --force  # Skip confirmation
 
 ### Shell Completion
 
+veve provides shell completion for bash, zsh, and fish shells. Completions include support for:
+- Commands: `convert`, `theme`, `completion`
+- Flags: `--engine`, `--theme`, `--output`, etc.
+- Engine names: `xelatex`, `lualatex`, `weasyprint`, `prince`
+
+#### Quick Installation
+
+The easiest way to install completions:
+
 ```bash
-# Generate bash completion
-veve completion bash
+# Auto-detect your shell and install
+./scripts/install-completion.sh
 
-# Generate zsh completion
-veve completion zsh
+# Or specify the shell explicitly
+./scripts/install-completion.sh bash
+./scripts/install-completion.sh zsh
+./scripts/install-completion.sh fish
+```
 
-# Generate fish completion
-veve completion fish
+#### Manual Installation
 
-# Install completions
-./scripts/install-completion.sh        # Auto-detect shell
-./scripts/install-completion.sh bash   # Specific shell
-./scripts/install-completion.sh all    # All supported shells
+If you prefer to install manually or the script doesn't work for you:
+
+**Bash:**
+```bash
+# Generate and save completion
+veve completion bash > ~/.bash_completions/veve
+# Add to ~/.bashrc or ~/.bash_profile
+source ~/.bash_completions/veve
+```
+
+**Zsh:**
+```bash
+# Create zsh completion directory
+mkdir -p ~/.zsh/completions
+# Generate completion
+veve completion zsh > ~/.zsh/completions/_veve
+# Add to ~/.zshrc
+fpath=(~/.zsh/completions $fpath)
+autoload -U compinit && compinit
+```
+
+**Fish:**
+```bash
+# Create fish completions directory
+mkdir -p ~/.config/fish/completions
+# Generate completion
+veve completion fish > ~/.config/fish/completions/veve.fish
+```
+
+#### Testing Completions
+
+After installation, reload your shell configuration:
+
+```bash
+# Bash/Fish
+source ~/.bashrc
+source ~/.config/fish/config.fish
+
+# Zsh
+source ~/.zshrc
+```
+
+Then test by typing:
+```bash
+veve conver<TAB>        # Should complete to "convert"
+veve convert --engine <TAB>  # Should show available engines
 ```
 
 ## Theme Development
