@@ -17,6 +17,38 @@ import (
 )
 
 // ImageProcessor handles downloading remote images and processing markdown content.
+// It detects HTTP/HTTPS image URLs in markdown, downloads them concurrently with retry logic,
+// and rewrites the markdown to use local file paths. Thread-safe with concurrent download support.
+//
+// Configuration:
+//   - maxConcurrentDownloads: Number of concurrent downloads (default 5)
+//   - timeoutSeconds: Timeout per image download in seconds (default 10)
+//   - maxRetries: Maximum retry attempts for transient errors (default 3)
+//   - maxBytesPerSession: Total download limit per session (default 500MB)
+//
+// Features:
+//   - Automatic detection of remote image URLs in markdown
+//   - Concurrent downloads with semaphore pattern
+//   - Retry logic with exponential backoff for transient errors
+//   - Graceful degradation: failed images don't block conversion
+//   - Resource limits: per-image (100MB) and per-session (500MB)
+//   - Best-effort cleanup of temporary files
+//
+// Thread Safety:
+//   - All shared state protected by mu (sync.Mutex)
+//   - Safe for concurrent use
+//
+// Example:
+//
+//	processor := NewImageProcessor(tempDir).
+//		WithTimeoutSeconds(15).
+//		WithMaxRetries(3)
+//	defer processor.Cleanup()
+//
+//	processedMD, err := processor.ProcessMarkdown(markdown)
+//	if err != nil {
+//		// Handle error, but continue with best-effort processing
+//	}
 type ImageProcessor struct {
 	// Core fields
 	tempDir    string
@@ -35,8 +67,27 @@ type ImageProcessor struct {
 	mu                   sync.Mutex // Protects shared state: imageMap, downloadErrors, totalBytesDownloaded
 }
 
-// NewImageProcessor creates a new ImageProcessor instance.
-// tempDir is the directory where downloaded images will be stored.
+// NewImageProcessor creates a new ImageProcessor instance with default configuration.
+//
+// Parameters:
+//   - tempDir: Directory where downloaded images will be stored. Must be writable.
+//
+// Default Configuration:
+//   - maxConcurrentDownloads: 5
+//   - timeoutSeconds: 10
+//   - maxRetries: 3
+//   - maxBytesPerSession: 500MB
+//
+// The returned processor can be further configured using:
+//   - WithTimeoutSeconds() to set per-request timeout
+//   - WithMaxRetries() to set retry attempts
+//
+// Example:
+//
+//	processor := NewImageProcessor("/tmp/veve-images").
+//		WithTimeoutSeconds(20).
+//		WithMaxRetries(5)
+//	defer processor.Cleanup()
 func NewImageProcessor(tempDir string) *ImageProcessor {
 	return &ImageProcessor{
 		tempDir:                tempDir,
@@ -308,6 +359,20 @@ func (ip *ImageProcessor) GetErrorSummary() string {
 
 // Cleanup removes all temporary image files created by this processor.
 // Uses best-effort approach: logs warnings but doesn't block on errors.
+//
+// Behavior:
+//   - Removes all downloaded image files from imageMap
+//   - Removes the temporary directory
+//   - Logs warnings to stderr if files can't be deleted
+//   - Always returns nil (cleanup failures don't block conversion)
+//
+// Recommended Usage:
+//
+//	defer processor.Cleanup() // Immediately after creating processor
+//
+// Thread Safety:
+//   - Safe to call concurrently
+//   - Snapshots imageMap before cleanup (doesn't hold locks during file removal)
 func (ip *ImageProcessor) Cleanup() error {
 	ip.mu.Lock()
 	imagesToClean := make([]string, 0, len(ip.imageMap))
