@@ -43,9 +43,15 @@ var convertCmd = &cobra.Command{
 			return err
 		}
 
+		remoteImagesTempDir, err := cmd.Flags().GetString("remote-images-temp-dir")
+		if err != nil {
+			return err
+		}
+
 		// Delegate to shared conversion function
 		return performConversion(inputFile, outputFile, theme, pdfEngine, quiet, verbose,
-			enableRemoteImages, remoteImagesTimeout, remoteImagesMaxRetries)
+			enableRemoteImages, remoteImagesTimeout, remoteImagesMaxRetries,
+			remoteImagesTempDir)
 	},
 }
 
@@ -56,4 +62,5 @@ func init() {
 	convertCmd.Flags().BoolP("enable-remote-images", "r", true, "automatically download and embed remote images in PDF")
 	convertCmd.Flags().Int("remote-images-timeout", 10, "timeout in seconds for downloading each remote image")
 	convertCmd.Flags().Int("remote-images-max-retries", 3, "maximum number of retries for failed image downloads")
+	convertCmd.Flags().String("remote-images-temp-dir", "", "custom temporary directory for downloaded images (default: system temp dir)")
 }

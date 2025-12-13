@@ -87,9 +87,14 @@ Usage:
 			return err
 		}
 
+		remoteImagesTempDir, err := cmd.Flags().GetString("remote-images-temp-dir")
+		if err != nil {
+			return err
+		}
+
 		// Delegate to convert logic
 		return performConversion(inputFile, outputFile, theme, pdfEngine, quiet, verbose,
-			enableRemoteImages, remoteImagesTimeout, remoteImagesMaxRetries)
+			enableRemoteImages, remoteImagesTimeout, remoteImagesMaxRetries, remoteImagesTempDir)
 	},
 }
 
@@ -107,11 +112,12 @@ func init() {
 	rootCmd.Flags().BoolP("enable-remote-images", "r", true, "automatically download and embed remote images in PDF")
 	rootCmd.Flags().Int("remote-images-timeout", 10, "timeout in seconds for downloading each remote image")
 	rootCmd.Flags().Int("remote-images-max-retries", 3, "maximum number of retries for failed image downloads")
+	rootCmd.Flags().String("remote-images-temp-dir", "", "custom temporary directory for downloaded images (default: system temp dir)")
 }
 
 // performConversion is a shared function used by both root command and convert subcommand.
 func performConversion(inputFile, outputFile, themeName, pdfEngine string, quiet, verbose bool,
-	enableRemoteImages bool, remoteImagesTimeout, remoteImagesMaxRetries int) error {
+	enableRemoteImages bool, remoteImagesTimeout, remoteImagesMaxRetries int, remoteImagesTempDir string) error {
 	// Log if verbose
 	logger.Debug("Converting %s to PDF (theme: %s, engine: %s)", inputFile, themeName, pdfEngine)
 
@@ -204,8 +210,23 @@ func performConversion(inputFile, outputFile, themeName, pdfEngine string, quiet
 	var processedInputFile string
 	var imageProcessor *converter.ImageProcessor
 	if enableRemoteImages {
-		// Create temp directory for downloaded images
-		tempDir := filepath.Join(os.TempDir(), fmt.Sprintf("veve-images-%d", os.Getpid()))
+		// Determine temp directory: use custom if provided, otherwise system temp
+		tempDir := remoteImagesTempDir
+		if tempDir == "" {
+			tempDir = filepath.Join(os.TempDir(), fmt.Sprintf("veve-images-%d", os.Getpid()))
+		}
+
+		// Create temp directory if it doesn't exist
+		if err := os.MkdirAll(tempDir, 0755); err != nil {
+			logger.Debug("Warning: Failed to create temp directory %s: %v", tempDir, err)
+			tempDir = filepath.Join(os.TempDir(), fmt.Sprintf("veve-images-%d", os.Getpid()))
+			os.MkdirAll(tempDir, 0755) // Best effort
+		}
+
+		if verbose {
+			logger.Debug("Using temp directory for images: %s", tempDir)
+		}
+
 		imageProcessor = converter.NewImageProcessor(tempDir).
 			WithTimeoutSeconds(remoteImagesTimeout).
 			WithMaxRetries(remoteImagesMaxRetries)
@@ -255,6 +276,13 @@ func performConversion(inputFile, outputFile, themeName, pdfEngine string, quiet
 					logger.Warn(errorSummary)
 				}
 			}
+
+			// Log disk space information if verbose
+			if verbose {
+				usedBytes := calculateDirectorySize(tempDir)
+				limitBytes := 500 * 1024 * 1024
+				logger.Debug("Disk space used for images: %d bytes (limit: %d bytes)", usedBytes, limitBytes)
+			}
 		}
 	} else {
 		processedInputFile = inputFile
@@ -282,6 +310,24 @@ func performConversion(inputFile, outputFile, themeName, pdfEngine string, quiet
 	}
 
 	return nil
+}
+
+// calculateDirectorySize calculates the total size of all files in a directory.
+// Used for logging disk space information.
+func calculateDirectorySize(dirPath string) int64 {
+	var totalSize int64
+	filepath.WalkDir(dirPath, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !d.IsDir() {
+			if info, err := d.Info(); err == nil {
+				totalSize += info.Size()
+			}
+		}
+		return nil
+	})
+	return totalSize
 }
 
 func main() {

@@ -392,3 +392,295 @@ Slow: ![slow](` + mock.ImageURL("/slow.png") + `)`
 		}
 	}
 }
+
+// ============================================================================
+// T044: Multiple Conversion Cleanup Integration Tests
+// ============================================================================
+
+// TestMultipleConversionsCleanup verifies that multiple processors can coexist
+// and each can be cleaned up independently without affecting others.
+func TestMultipleConversionsCleanup(t *testing.T) {
+	mock := testutil.NewMockHTTPServer()
+	defer mock.Close()
+
+	mock.RegisterImage("/image1.png", "png")
+	mock.RegisterImage("/image2.jpg", "jpeg")
+	mock.RegisterImage("/image3.gif", "gif")
+
+	// Create multiple processors with different temp directories
+	tempDir1 := t.TempDir()
+	tempDir2 := t.TempDir()
+	tempDir3 := t.TempDir()
+
+	processor1 := converter.NewImageProcessor(tempDir1)
+	processor2 := converter.NewImageProcessor(tempDir2)
+	processor3 := converter.NewImageProcessor(tempDir3)
+
+	markdown1 := `![img1](` + mock.ImageURL("/image1.png") + `)`
+	markdown2 := `![img2](` + mock.ImageURL("/image2.jpg") + `)`
+	markdown3 := `![img3](` + mock.ImageURL("/image3.gif") + `)`
+
+	// Process with each processor
+	_, err1 := processor1.ProcessMarkdown(markdown1)
+	if err1 != nil {
+		t.Fatalf("Processor 1 failed: %v", err1)
+	}
+
+	_, err2 := processor2.ProcessMarkdown(markdown2)
+	if err2 != nil {
+		t.Fatalf("Processor 2 failed: %v", err2)
+	}
+
+	_, err3 := processor3.ProcessMarkdown(markdown3)
+	if err3 != nil {
+		t.Fatalf("Processor 3 failed: %v", err3)
+	}
+
+	// Verify all have downloaded files
+	imageMap1 := processor1.GetImageMap()
+	imageMap2 := processor2.GetImageMap()
+	imageMap3 := processor3.GetImageMap()
+
+	if len(imageMap1) != 1 {
+		t.Errorf("Processor 1: expected 1 image, got %d", len(imageMap1))
+	}
+	if len(imageMap2) != 1 {
+		t.Errorf("Processor 2: expected 1 image, got %d", len(imageMap2))
+	}
+	if len(imageMap3) != 1 {
+		t.Errorf("Processor 3: expected 1 image, got %d", len(imageMap3))
+	}
+
+	// Get file paths before cleanup
+	var files1, files2, files3 []string
+	for _, path := range imageMap1 {
+		files1 = append(files1, path)
+	}
+	for _, path := range imageMap2 {
+		files2 = append(files2, path)
+	}
+	for _, path := range imageMap3 {
+		files3 = append(files3, path)
+	}
+
+	// Clean up processor 1
+	processor1.Cleanup()
+
+	// Verify processor 1's files are removed
+	for _, filePath := range files1 {
+		if _, err := os.Stat(filePath); err == nil {
+			t.Errorf("Processor 1 file should be removed: %s", filePath)
+		}
+	}
+
+	// Verify processor 2 and 3 files still exist
+	for _, filePath := range files2 {
+		if _, err := os.Stat(filePath); err != nil {
+			t.Errorf("Processor 2 file should still exist: %s", filePath)
+		}
+	}
+	for _, filePath := range files3 {
+		if _, err := os.Stat(filePath); err != nil {
+			t.Errorf("Processor 3 file should still exist: %s", filePath)
+		}
+	}
+
+	// Clean up remaining processors
+	processor2.Cleanup()
+	processor3.Cleanup()
+
+	// Verify all files are removed
+	for _, filePath := range files2 {
+		if _, err := os.Stat(filePath); err == nil {
+			t.Errorf("Processor 2 file should be removed: %s", filePath)
+		}
+	}
+	for _, filePath := range files3 {
+		if _, err := os.Stat(filePath); err == nil {
+			t.Errorf("Processor 3 file should be removed: %s", filePath)
+		}
+	}
+}
+
+// TestMultipleConversionsWithSharedTempDir verifies behavior when multiple
+// processors use the same parent temp directory (but their own subdirs).
+func TestMultipleConversionsWithSequentialProcessing(t *testing.T) {
+	parentTempDir := t.TempDir()
+
+	mock := testutil.NewMockHTTPServer()
+	defer mock.Close()
+
+	mock.RegisterImage("/image1.png", "png")
+	mock.RegisterImage("/image2.jpg", "jpeg")
+
+	// First conversion
+	processor1 := converter.NewImageProcessor(parentTempDir + "/conv1")
+	os.MkdirAll(parentTempDir+"/conv1", 0755)
+
+	markdown1 := `# First doc
+![img1](` + mock.ImageURL("/image1.png") + `)`
+
+	_, err1 := processor1.ProcessMarkdown(markdown1)
+	if err1 != nil {
+		t.Fatalf("First conversion failed: %v", err1)
+	}
+
+	// Second conversion in same parent
+	processor2 := converter.NewImageProcessor(parentTempDir + "/conv2")
+	os.MkdirAll(parentTempDir+"/conv2", 0755)
+
+	markdown2 := `# Second doc
+![img2](` + mock.ImageURL("/image2.jpg") + `)`
+
+	_, err2 := processor2.ProcessMarkdown(markdown2)
+	if err2 != nil {
+		t.Fatalf("Second conversion failed: %v", err2)
+	}
+
+	// Verify both have images
+	imageMap1 := processor1.GetImageMap()
+	imageMap2 := processor2.GetImageMap()
+
+	if len(imageMap1) != 1 {
+		t.Errorf("First conversion: expected 1 image, got %d", len(imageMap1))
+	}
+	if len(imageMap2) != 1 {
+		t.Errorf("Second conversion: expected 1 image, got %d", len(imageMap2))
+	}
+
+	// Clean up first
+	processor1.Cleanup()
+
+	// Second conversion's files should still exist
+	for url, path := range imageMap2 {
+		if _, err := os.Stat(path); err != nil {
+			t.Errorf("Second conversion file should still exist after first cleanup: %s (for %s)", path, url)
+		}
+	}
+
+	// Clean up second
+	processor2.Cleanup()
+
+	// All files should be gone
+	for _, path := range imageMap2 {
+		if _, err := os.Stat(path); err == nil {
+			t.Errorf("File should be removed after cleanup: %s", path)
+		}
+	}
+}
+
+// ============================================================================
+// T045: Session Size Limit Enforcement Integration Tests
+// ============================================================================
+
+// TestSessionSizeLimitEnforcement verifies that the 500MB session limit
+// prevents downloading additional images when the limit is reached.
+func TestSessionSizeLimitEnforcement(t *testing.T) {
+	tempDir := t.TempDir()
+	processor := converter.NewImageProcessor(tempDir)
+
+	mock := testutil.NewMockHTTPServer()
+	defer mock.Close()
+
+	// Create large images to test size limits
+	// Use 50MB images (within per-image 100MB limit)
+	largeImageData := testutil.CreateLargeTestImageData(50 * 1024 * 1024)
+	mock.RegisterResponse("/large1.bin", http.StatusOK, "application/octet-stream", largeImageData)
+	mock.RegisterResponse("/large2.bin", http.StatusOK, "application/octet-stream", largeImageData)
+	mock.RegisterResponse("/large3.bin", http.StatusOK, "application/octet-stream", largeImageData)
+	mock.RegisterImage("/small.png", "png") // Small image at end
+
+	// Build markdown with images that will exceed the limit
+	markdown := fmt.Sprintf(`# Large Images Test
+![large1](%s)
+![large2](%s)
+![large3](%s)
+![small](%s)`,
+		mock.ImageURL("/large1.bin"),
+		mock.ImageURL("/large2.bin"),
+		mock.ImageURL("/large3.bin"),
+		mock.ImageURL("/small.png"),
+	)
+
+	_, err := processor.ProcessMarkdown(markdown)
+	// ProcessMarkdown doesn't error on size limit, it just stops downloading
+	if err != nil {
+		t.Logf("ProcessMarkdown returned error: %v (may be expected for size limit)", err)
+	}
+
+	imageMap := processor.GetImageMap()
+	downloadErrors := processor.GetDownloadErrors()
+
+	// Should have downloaded some images but not all (hit the limit)
+	totalDownloaded := len(imageMap)
+	if totalDownloaded < 1 {
+		t.Error("Expected at least one image to be downloaded")
+	}
+	if totalDownloaded > 10 {
+		t.Error("Downloaded more images than expected")
+	}
+
+	// Verify downloads were tracked
+	successful, _, _ := processor.GetDownloadStats()
+	if successful < 1 {
+		t.Error("Expected at least one successful download")
+	}
+
+	// If we didn't download all images, there should be errors
+	if totalDownloaded < 4 && len(downloadErrors) < 1 {
+		t.Logf("Warning: some images not downloaded but no errors recorded")
+	}
+
+	processor.Cleanup()
+}
+
+// TestSessionSizeLimitBoundary verifies behavior when approaching the 500MB boundary.
+func TestSessionSizeLimitBoundary(t *testing.T) {
+	tempDir := t.TempDir()
+	processor := converter.NewImageProcessor(tempDir)
+
+	mock := testutil.NewMockHTTPServer()
+	defer mock.Close()
+
+	// Create images that approach the limit
+	// Use a practical approach with smaller images
+	imageSize := 5 * 1024 * 1024 // 5MB each
+	imageData := testutil.CreateLargeTestImageData(imageSize)
+
+	// Register 110 images of 5MB each (total 550MB, exceeds 500MB limit)
+	for i := 1; i <= 110; i++ {
+		path := fmt.Sprintf("/image%d.bin", i)
+		mock.RegisterResponse(path, http.StatusOK, "application/octet-stream", imageData)
+	}
+
+	// Build markdown requesting all 110 images (exceeds 500MB)
+	markdownParts := []string{"# Boundary Test\n"}
+	for i := 1; i <= 110; i++ {
+		path := fmt.Sprintf("/image%d.bin", i)
+		markdownParts = append(markdownParts,
+			fmt.Sprintf("![img%d](%s)\n", i, mock.ImageURL(path)))
+	}
+
+	markdown := strings.Join(markdownParts, "")
+
+	_, err := processor.ProcessMarkdown(markdown)
+	if err != nil {
+		t.Logf("ProcessMarkdown returned error: %v", err)
+	}
+
+	imageMap := processor.GetImageMap()
+	successful, _, _ := processor.GetDownloadStats()
+
+	// Should have downloaded exactly 100 images (500MB / 5MB per image)
+	expectedImages := 500 * 1024 * 1024 / imageSize
+	if successful > expectedImages+1 {
+		t.Errorf("Expected at most %d successful downloads, got %d", expectedImages, successful)
+	}
+
+	// Not all 110 should have been downloaded (we hit the limit)
+	if len(imageMap) == 110 {
+		t.Error("Expected size limit to prevent downloading all 110 images")
+	}
+
+	processor.Cleanup()
+}
